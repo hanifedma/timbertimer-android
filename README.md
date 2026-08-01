@@ -26,7 +26,7 @@ Everything the web app does, plus what only a phone can:
 | **A tree per session** | Seven species, chosen by tapping the tree rather than reading a dropdown. The name remembers your pick; past sessions keep the tree they were planted with. |
 | **Forest** | Today / week / month, with each tree drawn at the size its session earned. |
 | **Rest stopwatch** | Plants a wilted tree; rests under a minute are dropped. |
-| **To-do list** | Reorderable, synced when signed in. |
+| **To-do list** | Drag by the grip handle to reorder, synced when signed in. |
 | **Focus history** | Searchable, filterable, editable, with today/total stats. |
 | **Google sync** | The same account, the same four tables, the same rows. |
 | **Light / dark / system**, **English / 한국어** | Switchable in Settings. |
