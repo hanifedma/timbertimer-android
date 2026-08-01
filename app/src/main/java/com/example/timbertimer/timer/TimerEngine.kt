@@ -107,7 +107,12 @@ class TimerEngine(
      * than waiting for the next poll.
      */
     fun onRemoteChange() {
+        // A completing session deletes the shared row itself, and Realtime echoes
+        // that back. Reconciling on the echo would race the record being written,
+        // so the guard the poll already uses applies here too.
+        if (completing) return
         scope.launch {
+            if (completing) return@launch
             syncTimersFromCloud()
             ensureTicking()
         }

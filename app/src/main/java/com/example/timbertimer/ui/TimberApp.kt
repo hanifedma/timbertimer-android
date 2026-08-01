@@ -262,7 +262,7 @@ fun TimberApp(
                             onAdd = viewModel::addNote,
                             onToggle = viewModel::toggleNote,
                             onDelete = viewModel::deleteNote,
-                            onMove = viewModel::moveNote,
+                            onReorder = viewModel::reorderNotes,
                         )
 
                         Destination.RECORDS -> RecordsScreen(

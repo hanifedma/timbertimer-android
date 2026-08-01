@@ -1,31 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Adaptive icon background: a still, deep forest night. Kept as a plain gradient
-  with no detail, because the launcher masks and parallaxes this layer.
+  The web app's favicon background, transcribed from assets/canopy-logo.svg:
+  a vertical green gradient. The launcher applies its own corner rounding, so
+  the rect fills the whole viewport rather than carrying the SVG's own radius.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp"
     android:height="108dp"
-    android:viewportWidth="108"
-    android:viewportHeight="108">
-    <path android:pathData="M0,0h108v108h-108z">
+    android:viewportWidth="128"
+    android:viewportHeight="128">
+    <path android:pathData="M0,0h128v128h-128z">
         <aapt:attr name="android:fillColor">
             <gradient
-                android:startX="54"
+                android:startX="64"
                 android:startY="0"
-                android:endX="54"
-                android:endY="108"
+                android:endX="64"
+                android:endY="128"
                 android:type="linear">
-                <item
-                    android:color="#FF14532D"
-                    android:offset="0" />
-                <item
-                    android:color="#FF0B3B21"
-                    android:offset="0.55" />
-                <item
-                    android:color="#FF052E16"
-                    android:offset="1" />
+                <item android:color="#FF3EE06A" android:offset="0" />
+                <item android:color="#FF24A34A" android:offset="1" />
             </gradient>
         </aapt:attr>
     </path>

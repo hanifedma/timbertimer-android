@@ -1,45 +1,50 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  The pine from the web app's tree set, mapped from its 100x116 viewBox into the
-  adaptive icon's 108x108 one at 0.78 scale. That scale is what keeps the whole
-  tree inside the 72x72 safe zone, so no launcher mask ever clips a branch.
+  The sprout from assets/canopy-logo.svg, path for path, in the favicon's own
+  128x128 coordinate system.
 
-  This layer doubles as the monochrome icon: themed launchers tint it flat, and
-  the shapes are opaque, so it collapses to a clean pine silhouette.
+  The group re-centres it: the artwork's bounding box sits at (67.75, 66.75)
+  rather than the canvas centre, and 0.88 pulls the ground line's left end
+  inside the adaptive icon's safe circle, which a full-size copy would clip.
+
+  Doubles as the monochrome icon — themed launchers tint the strokes flat and
+  the shape still reads.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
-    android:viewportWidth="108"
-    android:viewportHeight="108">
-
-    <!-- Trunk, tapering slightly toward the crown. -->
-    <path
-        android:fillColor="#FFA9743F"
-        android:pathData="M49.7,90 Q50.5,84 51.3,77.5 L56.7,77.5 Q57.5,84 58.3,90 Z" />
-    <path
-        android:fillColor="#FF7A5230"
-        android:pathData="M54,90 L56.7,77.5 Q57.5,84 58.3,90 Z" />
-
-    <!-- Three tiers, bottom to top; the darker right half gives the light a side. -->
-    <path
-        android:fillColor="#FF34D07C"
-        android:pathData="M54,54.1 L79.7,79.1 L28.3,79.1 Z" />
-    <path
-        android:fillColor="#FF1F8A4C"
-        android:pathData="M54,54.1 L79.7,79.1 L54,79.1 Z" />
-
-    <path
-        android:fillColor="#FF3ADB86"
-        android:pathData="M54,35.4 L75.1,61.9 L32.9,61.9 Z" />
-    <path
-        android:fillColor="#FF1F8A4C"
-        android:pathData="M54,35.4 L75.1,61.9 L54,61.9 Z" />
-
-    <path
-        android:fillColor="#FF45E693"
-        android:pathData="M54,18.2 L69.6,44.8 L38.4,44.8 Z" />
-    <path
-        android:fillColor="#FF1F8A4C"
-        android:pathData="M54,18.2 L69.6,44.8 L54,44.8 Z" />
+    android:viewportWidth="128"
+    android:viewportHeight="128">
+    <group
+        android:pivotX="67.75"
+        android:pivotY="66.75"
+        android:scaleX="0.88"
+        android:scaleY="0.88"
+        android:translateX="-3.75"
+        android:translateY="-2.75">
+        <path
+            android:pathData="M45,101h38"
+            android:strokeColor="#FF06210F"
+            android:strokeWidth="7"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round" />
+        <path
+            android:pathData="M62,101c20,-9 3,-23 11,-36"
+            android:strokeColor="#FF06210F"
+            android:strokeWidth="7"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round" />
+        <path
+            android:pathData="M60,52c4,3 7,8 8.5,13.5 -7.5,1.5 -13,1.5 -17.5,-1s-8.5,-7 -11,-15c10,-2 16,0 20,2.5z"
+            android:strokeColor="#FF06210F"
+            android:strokeWidth="7"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round" />
+        <path
+            android:pathData="M77,40a26,26 0 0 0 -4,15c7,-0.5 12,-2.5 16,-5.5 3.5,-3.5 6,-8.5 6.5,-17 -10,0.5 -15,3.5 -18.5,7.5z"
+            android:strokeColor="#FF06210F"
+            android:strokeWidth="7"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round" />
+    </group>
 </vector>

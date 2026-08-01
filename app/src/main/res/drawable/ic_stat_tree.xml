@@ -1,19 +1,44 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Status bar icon. Android masks notification icons to their alpha channel, so
-  this is deliberately a flat white silhouette: any colour here would be thrown
-  away, and shading would only show up as holes.
+  Status bar icon: the app's sprout, in flat white. Android masks notification
+  icons to their alpha channel, so any colour here would be discarded and any
+  shading would come out as holes.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
-    android:viewportWidth="24"
-    android:viewportHeight="24"
-    android:tint="#FFFFFFFF">
-    <path
-        android:fillColor="#FFFFFFFF"
-        android:pathData="M10.6,21 L10.6,17.8 L13.4,17.8 L13.4,21 Z" />
-    <path
-        android:fillColor="#FFFFFFFF"
-        android:pathData="M12,2 L17.2,10.4 L14.9,10.4 L18.8,14.4 L16.2,14.4 L21,19.2 L3,19.2 L7.8,14.4 L5.2,14.4 L9.1,10.4 L6.8,10.4 Z" />
+    android:viewportWidth="128"
+    android:viewportHeight="128">
+    <group
+        android:pivotX="67.75"
+        android:pivotY="66.75"
+        android:scaleX="1.12"
+        android:scaleY="1.12"
+        android:translateX="-3.75"
+        android:translateY="-2.75">
+        <path
+            android:pathData="M45,101h38"
+            android:strokeColor="#FFFFFFFF"
+            android:strokeWidth="8"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round" />
+        <path
+            android:pathData="M62,101c20,-9 3,-23 11,-36"
+            android:strokeColor="#FFFFFFFF"
+            android:strokeWidth="8"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round" />
+        <path
+            android:pathData="M60,52c4,3 7,8 8.5,13.5 -7.5,1.5 -13,1.5 -17.5,-1s-8.5,-7 -11,-15c10,-2 16,0 20,2.5z"
+            android:strokeColor="#FFFFFFFF"
+            android:strokeWidth="8"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round" />
+        <path
+            android:pathData="M77,40a26,26 0 0 0 -4,15c7,-0.5 12,-2.5 16,-5.5 3.5,-3.5 6,-8.5 6.5,-17 -10,0.5 -15,3.5 -18.5,7.5z"
+            android:strokeColor="#FFFFFFFF"
+            android:strokeWidth="8"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round" />
+    </group>
 </vector>

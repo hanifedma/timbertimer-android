@@ -382,8 +382,8 @@ class TimberViewModel(
         viewModelScope.launch { repository.deleteNote(id) }
     }
 
-    fun moveNote(from: Int, to: Int) {
-        viewModelScope.launch { repository.moveNote(from, to) }
+    fun reorderNotes(orderedIds: List<String>) {
+        viewModelScope.launch { repository.reorderNotes(orderedIds) }
     }
 
     // ---------- account ----------

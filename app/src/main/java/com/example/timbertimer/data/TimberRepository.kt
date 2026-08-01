@@ -410,12 +410,26 @@ class TimberRepository(
         toggleNote(id)
     }
 
-    /** Moves one item and writes the whole order back, as the web app does. */
-    suspend fun moveNote(fromIndex: Int, toIndex: Int) = notesLock.withLock {
-        val current = _notes.value.toMutableList()
-        if (fromIndex !in current.indices || toIndex !in current.indices) return@withLock
-        current.add(toIndex, current.removeAt(fromIndex))
-        _notes.value = current
+    /**
+     * Adopts the order the user dragged the list into, and writes the whole list
+     * back — the same thing the web client does when a drag ends.
+     *
+     * Takes ids rather than indices because the screen shows unfinished tasks
+     * above finished ones, so a position on screen is not a position in the
+     * stored list. Ids leave no room for that to be got wrong.
+     */
+    suspend fun reorderNotes(orderedIds: List<String>) = notesLock.withLock {
+        val byId = _notes.value.associateBy { it.id }
+        val moved = orderedIds.mapNotNull(byId::get)
+        if (moved.isEmpty()) return@withLock
+
+        // Anything the caller did not mention keeps its place at the end, so a
+        // note added on another device mid-drag cannot be dropped by the write.
+        val mentioned = orderedIds.toSet()
+        val reordered = moved + _notes.value.filterNot { mentioned.contains(it.id) }
+        if (reordered.map { it.id } == _notes.value.map { it.id }) return@withLock
+
+        _notes.value = reordered
         persistNotes()
     }
 
