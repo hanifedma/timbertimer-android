@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Only needed when an account is connected; the app is fully usable offline. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- The running timer lives in an ongoing notification. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+
+    <!-- Buzz when a session finishes, even with the screen off. -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <!--
+      A countdown is a timer in the plainest sense, so it qualifies for
+      USE_EXACT_ALARM: the completion alarm must fire at the second it was set
+      for, not whenever the system next feels like batching work. On API 31-32
+      the older runtime-granted permission covers the same ground.
+    -->
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <uses-permission
+        android:name="android.permission.SCHEDULE_EXACT_ALARM"
+        android:maxSdkVersion="32" />
+
+    <!-- A timer set before a reboot is still due after it; endAt is wall-clock. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!-- Phones without a vibrator still install; the app simply does not buzz. -->
+    <uses-feature
+        android:name="android.hardware.vibrate"
+        android:required="false" />
+    <uses-feature
+        android:name="android.hardware.touchscreen"
+        android:required="false" />
+
+    <application
+        android:name=".TimberApplication"
+        android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.TimberTimer">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.TimberTimer"
+            android:windowSoftInputMode="adjustResize"
+            android:resizeableActivity="true"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|density|uiMode|locale|layoutDirection|fontScale"
+            android:launchMode="singleTop">
+
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <!--
+              Supabase redirects here after Google sign-in. singleTop above keeps
+              the running instance instead of stacking a second copy of the app.
+            -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="${authScheme}"
+                    android:host="${authHost}" />
+            </intent-filter>
+        </activity>
+
+        <!--
+          Keeps the countdown alive and on screen while the app is away. There is
+          no platform foreground-service type for a focus timer, so specialUse
+          declares the intent explicitly.
+        -->
+        <service
+            android:name=".timer.TimerService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Keeps a user-started focus countdown or stopwatch running and visible in its ongoing notification while the app is in the background." />
+        </service>
+
+        <!-- Exact-alarm backstop: fires completion even if the service was killed. -->
+        <receiver
+            android:name=".timer.TimerAlarmReceiver"
+            android:exported="false" />
+
+        <!--
+          Home screen to-do widget. Exported because the launcher has to be able
+          to enumerate and bind it; it acts on nothing but the framework's own
+          APPWIDGET_ broadcasts.
+        -->
+        <receiver
+            android:name=".widget.TodoWidget"
+            android:exported="true"
+            android:label="@string/widget_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/todo_widget_info" />
+        </receiver>
+
+        <!--
+          Ticking a task off and opening the list live here instead, behind a
+          private receiver, so a tap that changes the user's data can only come
+          from this app's own PendingIntents.
+        -->
+        <receiver
+            android:name=".widget.TodoWidgetActions"
+            android:exported="false" />
+
+        <!--
+          Feeds the widget's scrolling list. BIND_REMOTEVIEWS restricts binding to
+          the system, which is what stops another app from pulling the task list
+          out of this service.
+        -->
+        <service
+            android:name=".widget.TodoWidgetService"
+            android:exported="false"
+            android:permission="android.permission.BIND_REMOTEVIEWS" />
+
+        <!-- Restores the ongoing notification for a timer that outlived a reboot. -->
+        <receiver
+            android:name=".timer.BootCompletedReceiver"
+            android:exported="true"
+            android:enabled="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+    </application>
+
+</manifest>

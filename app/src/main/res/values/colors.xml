@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      Only what the platform needs outside Compose: the pre-Compose window
+      background and the notification accent. The full palette lives in
+      ui/theme/Color.kt. values-night/ carries the dark counterpart so the
+      launch frame already matches the theme Compose is about to draw.
+    -->
+    <color name="timber_window_background">#FFF2F2F7</color>
+    <color name="timber_accent">#FF248A3D</color>
+
+    <!-- Widget. RemoteViews cannot read the Compose theme, so the palette is
+         mirrored here and switched by values-night. -->
+    <color name="widget_background">#FFFFFFFF</color>
+    <color name="widget_text">#FF000000</color>
+    <color name="widget_muted">#993C3C43</color>
+    <color name="widget_divider">#243C3C43</color>
+    <color name="widget_accent">#FF248A3D</color>
+</resources>

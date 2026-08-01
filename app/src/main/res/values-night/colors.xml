@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="timber_window_background">#FF000000</color>
+    <color name="timber_accent">#FF30D158</color>
+
+    <color name="widget_background">#FF1C1C1E</color>
+    <color name="widget_text">#FFFFFFFF</color>
+    <color name="widget_muted">#99EBEBF5</color>
+    <color name="widget_divider">#1AFFFFFF</color>
+    <color name="widget_accent">#FF30D158</color>
+</resources>

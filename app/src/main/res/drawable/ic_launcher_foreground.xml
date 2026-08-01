@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The pine from the web app's tree set, mapped from its 100x116 viewBox into the
+  adaptive icon's 108x108 one at 0.78 scale. That scale is what keeps the whole
+  tree inside the 72x72 safe zone, so no launcher mask ever clips a branch.
+
+  This layer doubles as the monochrome icon: themed launchers tint it flat, and
+  the shapes are opaque, so it collapses to a clean pine silhouette.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Trunk, tapering slightly toward the crown. -->
+    <path
+        android:fillColor="#FFA9743F"
+        android:pathData="M49.7,90 Q50.5,84 51.3,77.5 L56.7,77.5 Q57.5,84 58.3,90 Z" />
+    <path
+        android:fillColor="#FF7A5230"
+        android:pathData="M54,90 L56.7,77.5 Q57.5,84 58.3,90 Z" />
+
+    <!-- Three tiers, bottom to top; the darker right half gives the light a side. -->
+    <path
+        android:fillColor="#FF34D07C"
+        android:pathData="M54,54.1 L79.7,79.1 L28.3,79.1 Z" />
+    <path
+        android:fillColor="#FF1F8A4C"
+        android:pathData="M54,54.1 L79.7,79.1 L54,79.1 Z" />
+
+    <path
+        android:fillColor="#FF3ADB86"
+        android:pathData="M54,35.4 L75.1,61.9 L32.9,61.9 Z" />
+    <path
+        android:fillColor="#FF1F8A4C"
+        android:pathData="M54,35.4 L75.1,61.9 L54,61.9 Z" />
+
+    <path
+        android:fillColor="#FF45E693"
+        android:pathData="M54,18.2 L69.6,44.8 L38.4,44.8 Z" />
+    <path
+        android:fillColor="#FF1F8A4C"
+        android:pathData="M54,18.2 L69.6,44.8 L54,44.8 Z" />
+</vector>

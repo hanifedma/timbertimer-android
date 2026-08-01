@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  One task.
+
+  The circle and the text are separately tappable: the circle crosses the task
+  off in place, the text opens the app to edit it. Both get a full-height target
+  so neither needs a careful aim.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:minHeight="44dp">
+
+    <ImageView
+        android:id="@+id/item_check"
+        android:layout_width="44dp"
+        android:layout_height="44dp"
+        android:padding="10dp"
+        android:src="@drawable/ic_widget_unchecked"
+        android:contentDescription="@string/notes_mark_complete" />
+
+    <TextView
+        android:id="@+id/item_text"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:gravity="center_vertical"
+        android:minHeight="44dp"
+        android:paddingTop="6dp"
+        android:paddingBottom="6dp"
+        android:paddingEnd="8dp"
+        android:textColor="@color/widget_text"
+        android:textSize="15sp"
+        android:maxLines="2"
+        android:ellipsize="end" />
+</LinearLayout>

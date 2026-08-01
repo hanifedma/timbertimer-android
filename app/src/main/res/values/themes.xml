@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      Only the window shell before Compose takes over. Matching the Compose
+      background here stops the white flash between launch and first frame.
+    -->
+    <style name="Theme.TimberTimer" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/timber_window_background</item>
+    </style>
+</resources>

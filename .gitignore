@@ -1,0 +1,32 @@
+# Build output
+build/
+/captures
+.externalNativeBuild
+.cxx
+.kotlin/
+
+# Gradle
+.gradle/
+*.iml
+
+# Machine-specific: points at this computer's SDK install.
+local.properties
+
+# IDE. Android Studio regenerates all of it, and several files embed absolute
+# paths from whichever machine last opened the project.
+.idea/
+
+# Signing material — never commit these. Anyone holding the keystore and its
+# password can publish an update that Android accepts as genuine.
+keystore.properties
+*.jks
+*.keystore
+
+# Built APKs go on GitHub Releases instead of into the tree: ~14 MB each, and a
+# new one every build, which is what git handles worst.
+*.apk
+*.aab
+
+# Misc
+.DS_Store
+*.hprof

@@ -1,0 +1,203 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">TimberTimer</string>
+    <string name="app_slogan">Forget all else, feel the timber grow.</string>
+
+    <!-- Navigation -->
+    <string name="nav_focus">Focus</string>
+    <string name="nav_forest">Forest</string>
+    <string name="nav_tasks">To-Do</string>
+    <string name="nav_records">Records</string>
+    <string name="nav_settings">Settings</string>
+
+    <!-- Timer -->
+    <string name="mode_countdown">Countdown</string>
+    <string name="mode_stopwatch">Stopwatch</string>
+    <string name="field_session">Session</string>
+    <string name="field_duration">Duration</string>
+    <string name="field_custom">Custom</string>
+    <string name="field_tree">Tree</string>
+    <string name="field_started">Started</string>
+    <string name="field_status">Status</string>
+    <string name="field_goal_minutes">Goal minutes</string>
+    <string name="field_actual_minutes">Actual minutes</string>
+    <string name="field_minutes">minutes</string>
+    <string name="timer_ready">Ready</string>
+    <string name="timer_growing">Growing</string>
+    <string name="btn_start">Start</string>
+    <string name="btn_finish">Finish</string>
+    <string name="btn_cancel">Cancel</string>
+    <string name="btn_save">Save</string>
+    <string name="btn_close">Close</string>
+    <string name="btn_delete">Delete</string>
+
+    <!-- Rest stopwatch -->
+    <string name="rest_title">Rest stopwatch</string>
+    <string name="rest_resting">Resting</string>
+    <string name="rest_elapsed">Elapsed</string>
+    <string name="rest_start">Start rest</string>
+    <string name="rest_finish">Finish rest</string>
+    <string name="rest_record_title">Rest</string>
+    <string name="record_rested">Rested</string>
+    <string name="toast_rest_planted">Rest planted a wilted tree.</string>
+    <string name="toast_rest_discarded">Rest was too short to plant.</string>
+
+    <!-- To-do -->
+    <string name="notes_kicker">Tasks</string>
+    <string name="notes_title">To-Do</string>
+    <string name="notes_placeholder">Add a task…</string>
+    <string name="notes_add">Add task</string>
+    <string name="notes_empty">No tasks yet.</string>
+    <string name="notes_mark_complete">Mark complete</string>
+    <string name="notes_mark_incomplete">Mark incomplete</string>
+    <string name="notes_delete">Delete task</string>
+    <string name="notes_move_up">Move up</string>
+    <string name="notes_move_down">Move down</string>
+
+    <!-- Records -->
+    <string name="records_kicker">Forest record</string>
+    <string name="records_title">Focus history</string>
+    <string name="records_add">Add session</string>
+    <string name="records_search">Search records</string>
+    <string name="records_empty">No records yet.</string>
+    <string name="stats_today">Today</string>
+    <string name="stats_total">Total</string>
+    <string name="filter_all">All</string>
+    <string name="filter_completed">Completed</string>
+    <string name="filter_abandoned">Abandoned</string>
+    <string name="status_completed">Completed</string>
+    <string name="status_abandoned">Abandoned</string>
+    <string name="record_planted">Planted</string>
+    <string name="record_abandoned">Abandoned</string>
+    <string name="metric_focused">%1$dm focused</string>
+    <string name="metric_goal">%1$dm goal</string>
+    <string name="action_edit">Edit</string>
+    <string name="action_delete">Delete</string>
+    <string name="dialog_edit_session">Edit session</string>
+    <string name="dialog_add_session">Add session</string>
+
+    <!-- Forest -->
+    <string name="grove_weekly">Weekly forest</string>
+    <string name="grove_monthly">Monthly forest</string>
+    <string name="grove_today">Today\'s forest</string>
+    <string name="grove_view_today">Today</string>
+    <string name="grove_view_week">Week</string>
+    <string name="grove_view_month">Month</string>
+    <string name="grove_current">Current</string>
+    <string name="grove_previous">Previous</string>
+    <string name="grove_next">Next</string>
+    <string name="grove_empty_today">No trees planted today.</string>
+    <string name="grove_empty_week">No trees planted this week.</string>
+    <string name="grove_empty_month">No trees planted this month.</string>
+    <string name="grove_focused">%1$s focused</string>
+    <string name="grove_rested">%1$s rested</string>
+    <plurals name="grove_trees">
+        <item quantity="one">1 tree</item>
+        <item quantity="other">%1$d trees</item>
+    </plurals>
+
+    <!-- Account -->
+    <string name="account_kicker">Accounts</string>
+    <string name="account_title">Google sync</string>
+    <string name="account_status_local">Records are saved on this device.</string>
+    <string name="account_status_cloud">Use Google to sync records across devices.</string>
+    <string name="account_continue_google">Continue with Google</string>
+    <string name="account_sign_out">Sign out</string>
+    <string name="account_delete_all">Delete all records</string>
+    <string name="badge_local">Local</string>
+    <string name="badge_synced">Synced</string>
+    <string name="brand_local_garden">Local garden</string>
+    <string name="brand_cloud_garden">Cloud garden</string>
+
+    <!-- Settings -->
+    <string name="settings_appearance">Appearance</string>
+    <string name="settings_theme_system">System</string>
+    <string name="settings_theme_light">Light</string>
+    <string name="settings_theme_dark">Dark</string>
+    <string name="settings_language">Language</string>
+    <string name="settings_language_system">System</string>
+    <string name="settings_sound">Timer sound</string>
+    <string name="settings_volume">Volume</string>
+    <string name="settings_vibrate">Vibrate when finished</string>
+    <string name="settings_data">Data</string>
+    <string name="sound_on">Sound on</string>
+    <string name="sound_off">Sound off</string>
+
+    <!-- Toasts -->
+    <string name="toast_session_started">Session started.</string>
+    <string name="toast_stopwatch_started">Stopwatch started.</string>
+    <string name="toast_session_planted">Session planted.</string>
+    <string name="toast_session_abandoned">Session recorded as abandoned.</string>
+    <string name="toast_timer_finished_elsewhere">Timer already finished on another device.</string>
+    <string name="toast_record_saved">Record saved.</string>
+    <string name="toast_record_deleted">Record deleted.</string>
+    <string name="toast_signed_in">Signed in as %1$s.</string>
+    <string name="toast_signed_out">Signed out.</string>
+    <string name="toast_sound_on">Timer sound on.</string>
+    <string name="toast_sound_off">Timer sound off.</string>
+    <string name="toast_all_deleted">All records deleted.</string>
+    <string name="toast_cloud_load_fail">Cloud sync could not load. Local records are still available.</string>
+    <string name="toast_cloud_not_ready">Cloud table is not ready. Using local records.</string>
+    <string name="toast_cloud_save_fail">Cloud save failed. Saved locally.</string>
+    <string name="toast_cloud_update_fail">Cloud update failed.</string>
+    <string name="toast_cloud_delete_fail">Cloud delete failed.</string>
+    <string name="toast_cloud_delete_all_fail">Failed to delete cloud records.</string>
+    <string name="toast_cloud_timer_sql">Cloud timer sync needs the updated Supabase SQL.</string>
+    <string name="toast_offline">No connection. Saved on this device.</string>
+    <string name="auth_cancelled">Sign-in cancelled.</string>
+    <string name="auth_verify_failed">Sign-in could not be verified. Please try again.</string>
+    <string name="auth_no_browser">No browser available to sign in with.</string>
+
+    <!-- Confirmations -->
+    <string name="confirm_delete_all_cloud">Delete all cloud records? This cannot be undone.</string>
+    <string name="confirm_delete_all_local">Delete all local records? This cannot be undone.</string>
+    <string name="confirm_delete_record">Delete “%1$s”?</string>
+    <string name="confirm_delete_title">Delete</string>
+
+    <!-- Units -->
+    <string name="unit_m">m</string>
+    <string name="unit_h">h</string>
+
+    <!-- Tree species. Records store the English label, so these are display only. -->
+    <string name="tree_canopy">Canopy tree</string>
+    <string name="tree_palm">Palm tree</string>
+    <string name="tree_pine">Pine tree</string>
+    <string name="tree_bamboo">Bamboo stand</string>
+    <string name="tree_fern">Fern tree</string>
+    <string name="tree_kapok">Kapok tree</string>
+    <string name="tree_mangrove">Mangrove tree</string>
+    <string name="tree_wilted">Wilted sprout</string>
+
+    <!-- Notifications -->
+    <string name="notif_channel_running">Running timer</string>
+    <string name="notif_channel_running_desc">Shows the focus countdown or stopwatch while it runs.</string>
+    <string name="notif_channel_done">Finished sessions</string>
+    <string name="notif_channel_done_desc">Alerts you the moment a focus session finishes.</string>
+    <string name="notif_focus_title">%1$s</string>
+    <string name="notif_focus_countdown">Focus — %1$s left</string>
+    <string name="notif_focus_stopwatch">Focus — running</string>
+    <string name="notif_rest_title">Rest</string>
+    <string name="notif_rest_text">Resting</string>
+    <string name="notif_action_finish">Finish</string>
+    <string name="notif_action_give_up">Give up</string>
+    <string name="notif_done_title">Session planted 🌲</string>
+    <string name="notif_done_text">%1$s — %2$s focused. A %3$s joined your forest.</string>
+    <!-- Widget -->
+    <string name="widget_pin">Add the To-Do widget to your home screen</string>
+    <string name="widget_pin_unsupported">Your launcher does not support adding widgets from inside an app. Long-press the home screen instead.</string>
+    <string name="widget_name">To-Do list</string>
+    <string name="widget_description">Your tasks on the home screen. Tap a circle to cross one off.</string>
+    <string name="widget_empty">No tasks yet.\nTap + to add one.</string>
+    <string name="widget_count">%1$d of %2$d</string>
+
+    <string name="notif_channel_idle">Reminders</string>
+    <string name="notif_channel_idle_desc">A quiet nudge to start a session when nothing is growing.</string>
+    <string name="notif_idle_title">Your forest is waiting 🌱</string>
+    <string name="notif_idle_empty">Nothing is growing right now. Start a session and plant a tree.</string>
+    <string name="notif_idle_progress">%1$s focused today. Ready to plant another tree?</string>
+    <string name="notif_idle_action">Start focusing</string>
+    <string name="settings_idle_reminder">Remind me when nothing is running</string>
+    <string name="notif_permission_rationale">Allow notifications so the running timer stays visible and tells you when it finishes.</string>
+    <string name="notif_permission_allow">Allow</string>
+    <string name="notif_permission_later">Not now</string>
+</resources>

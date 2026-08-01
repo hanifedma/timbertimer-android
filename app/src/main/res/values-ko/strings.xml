@@ -1,0 +1,200 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_slogan">모든 걸 잊고, 나무가 자라는 걸 느껴보세요.</string>
+
+    <!-- Navigation -->
+    <string name="nav_focus">집중</string>
+    <string name="nav_forest">숲</string>
+    <string name="nav_tasks">투두</string>
+    <string name="nav_records">기록</string>
+    <string name="nav_settings">설정</string>
+
+    <!-- Timer -->
+    <string name="mode_countdown">카운트다운</string>
+    <string name="mode_stopwatch">스톱워치</string>
+    <string name="field_session">세션</string>
+    <string name="field_duration">시간</string>
+    <string name="field_custom">직접 입력</string>
+    <string name="field_tree">나무</string>
+    <string name="field_started">시작 시각</string>
+    <string name="field_status">상태</string>
+    <string name="field_goal_minutes">목표 (분)</string>
+    <string name="field_actual_minutes">실제 (분)</string>
+    <string name="field_minutes">분</string>
+    <string name="timer_ready">준비됨</string>
+    <string name="timer_growing">자라는 중</string>
+    <string name="btn_start">시작</string>
+    <string name="btn_finish">완료</string>
+    <string name="btn_cancel">취소</string>
+    <string name="btn_save">저장</string>
+    <string name="btn_close">닫기</string>
+    <string name="btn_delete">삭제</string>
+
+    <!-- Rest stopwatch -->
+    <string name="rest_title">휴식 스톱워치</string>
+    <string name="rest_resting">휴식 중</string>
+    <string name="rest_elapsed">경과</string>
+    <string name="rest_start">휴식 시작</string>
+    <string name="rest_finish">휴식 완료</string>
+    <string name="rest_record_title">휴식</string>
+    <string name="record_rested">휴식함</string>
+    <string name="toast_rest_planted">휴식이 시든 나무를 심었어요.</string>
+    <string name="toast_rest_discarded">휴식이 너무 짧아 심지 않았어요.</string>
+
+    <!-- To-do -->
+    <string name="notes_kicker">할 일</string>
+    <string name="notes_title">투두</string>
+    <string name="notes_placeholder">할 일 추가…</string>
+    <string name="notes_add">할 일 추가</string>
+    <string name="notes_empty">아직 할 일이 없어요.</string>
+    <string name="notes_mark_complete">완료로 표시</string>
+    <string name="notes_mark_incomplete">미완료로 표시</string>
+    <string name="notes_delete">할 일 삭제</string>
+    <string name="notes_move_up">위로 이동</string>
+    <string name="notes_move_down">아래로 이동</string>
+
+    <!-- Records -->
+    <string name="records_kicker">숲 기록</string>
+    <string name="records_title">집중 기록</string>
+    <string name="records_add">세션 추가</string>
+    <string name="records_search">기록 검색</string>
+    <string name="records_empty">아직 기록이 없어요.</string>
+    <string name="stats_today">오늘</string>
+    <string name="stats_total">전체</string>
+    <string name="filter_all">전체</string>
+    <string name="filter_completed">완료</string>
+    <string name="filter_abandoned">중단</string>
+    <string name="status_completed">완료</string>
+    <string name="status_abandoned">중단</string>
+    <string name="record_planted">심음</string>
+    <string name="record_abandoned">중단</string>
+    <string name="metric_focused">%1$d분 집중</string>
+    <string name="metric_goal">목표 %1$d분</string>
+    <string name="action_edit">편집</string>
+    <string name="action_delete">삭제</string>
+    <string name="dialog_edit_session">세션 편집</string>
+    <string name="dialog_add_session">세션 추가</string>
+
+    <!-- Forest -->
+    <string name="grove_weekly">주간 숲</string>
+    <string name="grove_monthly">월간 숲</string>
+    <string name="grove_today">오늘의 숲</string>
+    <string name="grove_view_today">오늘</string>
+    <string name="grove_view_week">주</string>
+    <string name="grove_view_month">월</string>
+    <string name="grove_current">현재</string>
+    <string name="grove_previous">이전</string>
+    <string name="grove_next">다음</string>
+    <string name="grove_empty_today">오늘 심은 나무가 없어요.</string>
+    <string name="grove_empty_week">이번 주에 심은 나무가 없어요.</string>
+    <string name="grove_empty_month">이번 달에 심은 나무가 없어요.</string>
+    <string name="grove_focused">%1$s 집중</string>
+    <string name="grove_rested">%1$s 휴식</string>
+    <plurals name="grove_trees">
+        <item quantity="other">%1$d그루</item>
+    </plurals>
+
+    <!-- Account -->
+    <string name="account_kicker">계정</string>
+    <string name="account_title">Google 동기화</string>
+    <string name="account_status_local">기록이 이 기기에 저장됩니다.</string>
+    <string name="account_status_cloud">Google로 로그인하면 기기 간에 동기화돼요.</string>
+    <string name="account_continue_google">Google로 계속하기</string>
+    <string name="account_sign_out">로그아웃</string>
+    <string name="account_delete_all">모든 기록 삭제</string>
+    <string name="badge_local">로컬</string>
+    <string name="badge_synced">동기화됨</string>
+    <string name="brand_local_garden">로컬 정원</string>
+    <string name="brand_cloud_garden">클라우드 정원</string>
+
+    <!-- Settings -->
+    <string name="settings_appearance">테마</string>
+    <string name="settings_theme_system">시스템</string>
+    <string name="settings_theme_light">밝게</string>
+    <string name="settings_theme_dark">어둡게</string>
+    <string name="settings_language">언어</string>
+    <string name="settings_language_system">시스템</string>
+    <string name="settings_sound">타이머 소리</string>
+    <string name="settings_volume">음량</string>
+    <string name="settings_vibrate">완료 시 진동</string>
+    <string name="settings_data">데이터</string>
+    <string name="sound_on">소리 켜짐</string>
+    <string name="sound_off">소리 꺼짐</string>
+
+    <!-- Toasts -->
+    <string name="toast_session_started">세션을 시작했어요.</string>
+    <string name="toast_stopwatch_started">스톱워치를 시작했어요.</string>
+    <string name="toast_session_planted">세션을 심었어요.</string>
+    <string name="toast_session_abandoned">세션을 중단으로 기록했어요.</string>
+    <string name="toast_timer_finished_elsewhere">다른 기기에서 이미 타이머가 끝났어요.</string>
+    <string name="toast_record_saved">기록을 저장했어요.</string>
+    <string name="toast_record_deleted">기록을 삭제했어요.</string>
+    <string name="toast_signed_in">%1$s(으)로 로그인했어요.</string>
+    <string name="toast_signed_out">로그아웃했어요.</string>
+    <string name="toast_sound_on">타이머 소리를 켰어요.</string>
+    <string name="toast_sound_off">타이머 소리를 껐어요.</string>
+    <string name="toast_all_deleted">모든 기록을 삭제했어요.</string>
+    <string name="toast_cloud_load_fail">클라우드 동기화를 불러오지 못했어요. 로컬 기록은 그대로 사용할 수 있어요.</string>
+    <string name="toast_cloud_not_ready">클라우드 테이블이 준비되지 않았어요. 로컬 기록을 사용해요.</string>
+    <string name="toast_cloud_save_fail">클라우드 저장에 실패했어요. 로컬에 저장했어요.</string>
+    <string name="toast_cloud_update_fail">클라우드 업데이트에 실패했어요.</string>
+    <string name="toast_cloud_delete_fail">클라우드 삭제에 실패했어요.</string>
+    <string name="toast_cloud_delete_all_fail">클라우드 기록 삭제에 실패했어요.</string>
+    <string name="toast_cloud_timer_sql">클라우드 타이머 동기화에는 최신 Supabase SQL이 필요해요.</string>
+    <string name="toast_offline">연결이 없어 이 기기에 저장했어요.</string>
+    <string name="auth_cancelled">로그인을 취소했어요.</string>
+    <string name="auth_verify_failed">로그인을 확인하지 못했어요. 다시 시도해 주세요.</string>
+    <string name="auth_no_browser">로그인에 사용할 브라우저가 없어요.</string>
+
+    <!-- Confirmations -->
+    <string name="confirm_delete_all_cloud">모든 클라우드 기록을 삭제할까요? 되돌릴 수 없어요.</string>
+    <string name="confirm_delete_all_local">모든 로컬 기록을 삭제할까요? 되돌릴 수 없어요.</string>
+    <string name="confirm_delete_record">“%1$s”을(를) 삭제할까요?</string>
+    <string name="confirm_delete_title">삭제</string>
+
+    <!-- Units -->
+    <string name="unit_m">분</string>
+    <string name="unit_h">시간</string>
+
+    <!-- Tree species -->
+    <string name="tree_canopy">캐노피 나무</string>
+    <string name="tree_palm">야자수</string>
+    <string name="tree_pine">소나무</string>
+    <string name="tree_bamboo">대나무</string>
+    <string name="tree_fern">고사리 나무</string>
+    <string name="tree_kapok">케이폭 나무</string>
+    <string name="tree_mangrove">맹그로브 나무</string>
+    <string name="tree_wilted">시든 새싹</string>
+
+    <!-- Notifications -->
+    <string name="notif_channel_running">실행 중인 타이머</string>
+    <string name="notif_channel_running_desc">집중 카운트다운이나 스톱워치가 실행되는 동안 표시해요.</string>
+    <string name="notif_channel_done">완료된 세션</string>
+    <string name="notif_channel_done_desc">집중 세션이 끝나는 순간 알려줘요.</string>
+    <string name="notif_focus_countdown">집중 — %1$s 남음</string>
+    <string name="notif_focus_stopwatch">집중 — 진행 중</string>
+    <string name="notif_rest_title">휴식</string>
+    <string name="notif_rest_text">휴식 중</string>
+    <string name="notif_action_finish">완료</string>
+    <string name="notif_action_give_up">포기</string>
+    <string name="notif_done_title">세션을 심었어요 🌲</string>
+    <string name="notif_done_text">%1$s — %2$s 집중했어요. %3$s(이)가 숲에 합류했어요.</string>
+    <!-- Widget -->
+    <string name="widget_pin">홈 화면에 투두 위젯 추가</string>
+    <string name="widget_pin_unsupported">이 런처는 앱에서 위젯을 추가할 수 없어요. 홈 화면을 길게 눌러 추가해 주세요.</string>
+    <string name="widget_name">투두 리스트</string>
+    <string name="widget_description">홈 화면에서 할 일을 확인하세요. 동그라미를 누르면 완료로 표시돼요.</string>
+    <string name="widget_empty">아직 할 일이 없어요.\n+ 를 눌러 추가하세요.</string>
+    <string name="widget_count">%2$d개 중 %1$d개</string>
+
+    <string name="notif_channel_idle">알림</string>
+    <string name="notif_channel_idle_desc">아무것도 자라지 않을 때 조용히 알려줘요.</string>
+    <string name="notif_idle_title">숲이 기다리고 있어요 🌱</string>
+    <string name="notif_idle_empty">지금은 자라는 게 없어요. 세션을 시작해 나무를 심어보세요.</string>
+    <string name="notif_idle_progress">오늘 %1$s 집중했어요. 나무를 하나 더 심어볼까요?</string>
+    <string name="notif_idle_action">집중 시작</string>
+    <string name="settings_idle_reminder">실행 중이 없을 때 알림</string>
+    <string name="notif_permission_rationale">알림을 허용하면 실행 중인 타이머가 계속 보이고, 끝날 때 알려드려요.</string>
+    <string name="notif_permission_allow">허용</string>
+    <string name="notif_permission_later">나중에</string>
+</resources>
