@@ -63,8 +63,21 @@ alter publication supabase_realtime add table public.active_rest_timers;
 alter publication supabase_realtime add table public.notes;
 ```
 
-Without it the app still syncs — it falls back to polling every 15 seconds,
-exactly as the website does — but changes will not be instant.
+Deletes need one thing more. On a table with row level security, a DELETE
+carries only the primary key unless the table keeps a full copy of the old row —
+so `user_id` is absent, the subscription's filter and the security policy cannot
+be evaluated, and the event is dropped. Inserts and updates arrive; deletions do
+not. To fix that:
+
+```sql
+alter table public.focus_sessions replica identity full;
+alter table public.active_focus_timers replica identity full;
+alter table public.active_rest_timers replica identity full;
+alter table public.notes replica identity full;
+```
+
+Without any of this the app still syncs — it falls back to polling every 15
+seconds — but changes will not be instant.
 
 **The website is still the slower half of the pair.** `src/app.js` polls on a
 15-second timer and does not subscribe to Realtime, so *website → phone* becomes

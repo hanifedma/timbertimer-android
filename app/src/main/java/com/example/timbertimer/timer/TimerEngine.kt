@@ -76,7 +76,7 @@ class TimerEngine(
     private var tickJob: Job? = null
     private var foreground = false
     private var lastCloudSyncAt = 0L
-    private var lastNotesSyncAt = 0L
+    private var lastListSyncAt = 0L
 
     /** The timer the run-in tone has already been played for, so it plays once. */
     private var finishSoonPlayedFor: String? = null
@@ -407,9 +407,18 @@ class TimerEngine(
             lastCloudSyncAt = now
             syncTimersFromCloud()
         }
-        if (foreground && now - lastNotesSyncAt >= interval) {
-            lastNotesSyncAt = now
+        // Both lists are only worth re-reading while someone is looking at them.
+        if (foreground && now - lastListSyncAt >= interval) {
+            lastListSyncAt = now
             repository.refreshNotesFromCloud()
+
+            // Records need the same safety net the notes already had. Realtime
+            // does not always cover this one: on an RLS-protected table a DELETE
+            // carries only the primary key unless REPLICA IDENTITY is FULL, so
+            // neither the user_id filter nor the policy can be evaluated and the
+            // event is dropped. Without this poll, a session deleted on another
+            // device stayed on screen until the app was reopened.
+            repository.refreshRecordsFromCloud()
         }
     }
 

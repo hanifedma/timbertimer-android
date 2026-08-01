@@ -195,6 +195,29 @@ class TimberRepository(
             }
     }
 
+    /**
+     * Re-reads the records while the app is open, so a session deleted or edited
+     * on another device stops showing here.
+     *
+     * Deliberately quieter than [loadRecords]: no cache rewrite, no "cloud
+     * unreachable" message and no state change unless the list actually
+     * differs, because this runs on a timer rather than in response to the user.
+     */
+    suspend fun refreshRecordsFromCloud() {
+        val user = _session.value ?: return
+        val token = auth.validAccessToken() ?: return
+        val rows = runCatching { api.fetchSessions(token, user.userId) }
+            .getOrElse {
+                logSync(it)
+                return
+            }
+
+        val incoming = rows.map(::normalize).sortedByDescending { it.startedAt }
+        if (incoming == _records.value) return
+        local.writeCloudCache(user.userId, rows)
+        _records.value = incoming
+    }
+
     /** Polled while the app is open, so an edit made elsewhere lands here too. */
     suspend fun refreshNotesFromCloud() {
         val user = _session.value ?: return
