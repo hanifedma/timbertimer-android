@@ -179,6 +179,14 @@
     <string name="notif_action_give_up">포기</string>
     <string name="notif_done_title">세션을 심었어요 🌲</string>
     <string name="notif_done_text">%1$s — %2$s 집중했어요. %3$s(이)가 숲에 합류했어요.</string>
+    <string name="settings_background_sync">백그라운드에서 계속 동기화</string>
+    <string name="settings_background_sync_desc">다른 기기에서 생긴 변경을 계속 확인해서, 앱을 열지 않아도 위젯과 기록이 최신으로 유지돼요. 안드로이드가 요구하는 조용한 상시 알림이 표시됩니다.</string>
+    <string name="settings_battery">배터리 최적화 제외</string>
+    <string name="settings_battery_desc">안드로이드가 TimberTimer를 잠재우지 않도록 요청해요. 설정하지 않으면 일부 기기는 몇 분 뒤 백그라운드 동기화를 중단합니다.</string>
+    <string name="settings_battery_already">이미 배터리 최적화에서 제외되어 있어요.</string>
+    <string name="notif_sync_title">변경 사항 확인 중</string>
+    <string name="notif_sync_text">이 기기에서 목록과 기록을 최신으로 유지해요.</string>
+
     <!-- Widget -->
     <string name="widget_pin">홈 화면에 투두 위젯 추가</string>
     <string name="widget_pin_unsupported">이 런처는 앱에서 위젯을 추가할 수 없어요. 홈 화면을 길게 눌러 추가해 주세요.</string>

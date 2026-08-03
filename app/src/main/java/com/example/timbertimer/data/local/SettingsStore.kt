@@ -81,6 +81,22 @@ class SettingsStore(context: Context) {
         _idleReminder.value = enabled
     }
 
+    /**
+     * Keeps the app alive in the background so the live socket stays connected.
+     *
+     * Without it the process only exists while a timer runs or a screen is open,
+     * which is why a task ticked on one device could sit unnoticed in another
+     * device's widget for hours. The cost is a permanent low-priority
+     * notification, which the platform requires in exchange, so it gets a switch.
+     */
+    private val _backgroundSync = MutableStateFlow(prefs.getBoolean(KEY_BACKGROUND_SYNC, true))
+    val backgroundSync: StateFlow<Boolean> = _backgroundSync.asStateFlow()
+
+    fun setBackgroundSync(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_BACKGROUND_SYNC, enabled).apply()
+        _backgroundSync.value = enabled
+    }
+
     // ---------- timer defaults ----------
 
     private val _timerMode = MutableStateFlow(TimerMode.from(prefs.getString(KEY_TIMER_MODE, null)))
@@ -145,6 +161,7 @@ class SettingsStore(context: Context) {
         const val KEY_VOLUME = "sound-volume"
         const val KEY_VIBRATE = "vibrate"
         const val KEY_IDLE_REMINDER = "idle-reminder"
+        const val KEY_BACKGROUND_SYNC = "background-sync"
         const val KEY_TIMER_MODE = "timer-mode"
         const val KEY_DURATION = "duration"
         const val KEY_SESSION_NAME = "session-name"

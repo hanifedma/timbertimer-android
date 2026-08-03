@@ -441,6 +441,12 @@ class TimberViewModel(
         if (!enabled) engine.clearIdleNudge()
     }
 
+    fun setBackgroundSync(enabled: Boolean) {
+        settings.setBackgroundSync(enabled)
+        // Start or stop the service now rather than at the next timer change.
+        engine.onBackgroundSyncChanged()
+    }
+
     /** Auditions the chime at the volume just chosen. */
     fun previewSound() {
         feedback.playPreview()

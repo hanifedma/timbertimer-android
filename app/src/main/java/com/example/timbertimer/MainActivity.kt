@@ -1,6 +1,7 @@
 package com.example.timbertimer
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.appwidget.AppWidgetManager
 import android.content.ActivityNotFoundException
 import android.content.ComponentName
@@ -10,6 +11,8 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
+import android.provider.Settings
 import android.graphics.Color
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -103,6 +106,7 @@ class MainActivity : ComponentActivity() {
                     },
                     onOpenAuthUrl = ::openInCustomTab,
                     onAddWidget = ::requestPinWidget,
+                    onIgnoreBatteryOptimisation = ::requestIgnoreBatteryOptimisation,
                 )
             }
         }
@@ -177,6 +181,35 @@ class MainActivity : ComponentActivity() {
             runCatching { manager.requestPinAppWidget(provider, null, null) }.getOrDefault(false)
         if (!requested) {
             Toast.makeText(this, R.string.widget_pin_unsupported, Toast.LENGTH_LONG).show()
+        }
+    }
+
+    /**
+     * Opens Android's own exemption dialog.
+     *
+     * There is no way to grant this silently, and no way to make an app truly
+     * immune: several manufacturers kill background work whatever this says. It
+     * is the strongest thing the platform offers, so it is offered — and if the
+     * app is already exempt, that is reported rather than showing a dialog that
+     * would look like it did nothing.
+     */
+    @SuppressLint("BatteryLife")
+    private fun requestIgnoreBatteryOptimisation() {
+        val power = getSystemService(PowerManager::class.java)
+        if (power != null && power.isIgnoringBatteryOptimizations(packageName)) {
+            Toast.makeText(this, R.string.settings_battery_already, Toast.LENGTH_LONG).show()
+            return
+        }
+
+        val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+            .setData(Uri.parse("package:$packageName"))
+        try {
+            startActivity(intent)
+        } catch (_: ActivityNotFoundException) {
+            // Some builds hide the per-app dialog; the list screen still exists.
+            runCatching {
+                startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+            }
         }
     }
 

@@ -182,6 +182,14 @@
     <string name="notif_action_give_up">Give up</string>
     <string name="notif_done_title">Session planted 🌲</string>
     <string name="notif_done_text">%1$s — %2$s focused. A %3$s joined your forest.</string>
+    <string name="settings_background_sync">Keep syncing in the background</string>
+    <string name="settings_background_sync_desc">Keeps this device listening for changes made elsewhere, so the widget and your records stay current without opening the app. Shows a permanent quiet notification, which Android requires.</string>
+    <string name="settings_battery">Ignore battery optimisation</string>
+    <string name="settings_battery_desc">Ask Android to stop putting TimberTimer to sleep. Without this, some phones cut background syncing off after a few minutes.</string>
+    <string name="settings_battery_already">Already exempt from battery optimisation.</string>
+    <string name="notif_sync_title">Watching for changes</string>
+    <string name="notif_sync_text">Your list and records stay current on this device.</string>
+
     <!-- Widget -->
     <string name="widget_pin">Add the To-Do widget to your home screen</string>
     <string name="widget_pin_unsupported">Your launcher does not support adding widgets from inside an app. Long-press the home screen instead.</string>

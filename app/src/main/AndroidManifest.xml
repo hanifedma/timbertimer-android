@@ -28,6 +28,13 @@
     <!-- A timer set before a reboot is still due after it; endAt is wall-clock. -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
+    <!--
+      Only used to *offer* the exemption dialog from Settings; Android grants it
+      on the user's say-so, never silently. Without it a device can stop the
+      background sync a few minutes after the screen goes off.
+    -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
     <!-- Phones without a vibrator still install; the app simply does not buzz. -->
     <uses-feature
         android:name="android.hardware.vibrate"
@@ -77,8 +84,10 @@
         </activity>
 
         <!--
-          Keeps the countdown alive and on screen while the app is away. There is
-          no platform foreground-service type for a focus timer, so specialUse
+          Two jobs: keeps a running countdown alive and on screen while the app is
+          away, and — when background sync is on — keeps the live sync connection
+          open so changes made on the user's other devices reach this one. There
+          is no platform foreground-service type for either, so specialUse
           declares the intent explicitly.
         -->
         <service
@@ -87,7 +96,7 @@
             android:foregroundServiceType="specialUse">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="Keeps a user-started focus countdown or stopwatch running and visible in its ongoing notification while the app is in the background." />
+                android:value="Keeps a user-started focus countdown or stopwatch running and visible in its ongoing notification, and keeps the user's own to-do list and focus records in sync across their devices, while the app is in the background." />
         </service>
 
         <!-- Exact-alarm backstop: fires completion even if the service was killed. -->

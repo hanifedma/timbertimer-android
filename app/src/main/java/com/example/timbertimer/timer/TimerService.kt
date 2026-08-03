@@ -16,17 +16,23 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
 /**
- * Keeps the app alive and on screen while a timer runs.
+ * Keeps the app alive: while a timer runs, and — if background sync is on —
+ * whenever the app is installed at all.
  *
- * It does no timekeeping of its own — [TimerEngine] does that, from the clock.
- * What this buys is process priority (so the countdown is not killed the moment
- * the user switches away) and the ongoing notification the platform requires in
- * exchange.
+ * It does no timekeeping of its own; [TimerEngine] does that, from the clock.
+ * What this buys is process priority, and that is the whole point twice over: a
+ * countdown that is not killed the moment the user switches away, and a live
+ * sync connection that outlives the last open screen. Without the second, the
+ * process died with the UI, so a task ticked on one device sat unnoticed in
+ * another device's widget until something opened the app there.
+ *
+ * The permanent notification is what the platform charges for this.
  */
 class TimerService : Service() {
 
     private var scope: CoroutineScope? = null
     private var lastPostedAt = 0L
+    private var postedIdle = false
 
     private val container get() = (application as TimberApplication).container
 
@@ -47,11 +53,16 @@ class TimerService : Service() {
             val engine = container.timerEngine
             combine(engine.timer, engine.rest, engine.now) { timer, rest, _ -> timer to rest }
                 .collect { (timer, rest) ->
-                    if (timer == null && rest == null) {
+                    // Nothing running is no longer a reason to stop: background
+                    // sync is the service's other job, and it is the only thing
+                    // keeping the live socket — and so the widget — current.
+                    if (timer == null && rest == null &&
+                        !container.settings.backgroundSync.value
+                    ) {
                         stopSelf()
                         return@collect
                     }
-                    refreshNotification(timer != null, rest != null)
+                    refreshNotification(idle = timer == null && rest == null)
                 }
         }
     }
@@ -84,12 +95,19 @@ class TimerService : Service() {
      * once every few seconds keeps the shade from being rewritten sixty times a
      * minute for a bar that moves a pixel.
      */
-    private fun refreshNotification(hasTimer: Boolean, hasRest: Boolean) {
-        if (!hasTimer && !hasRest) return
+    private fun refreshNotification(idle: Boolean) {
         val now = System.currentTimeMillis()
-        if (now - lastPostedAt < REPOST_INTERVAL_MS) return
+        // The idle notification says nothing that changes second to second, so
+        // it is posted once on the transition rather than on every tick.
+        val due = if (idle) !postedIdle else now - lastPostedAt >= REPOST_INTERVAL_MS
+        if (!due) return
+
         lastPostedAt = now
-        container.notifications.update(container.timerEngine.timer.value, container.timerEngine.rest.value)
+        postedIdle = idle
+        container.notifications.update(
+            container.timerEngine.timer.value,
+            container.timerEngine.rest.value,
+        )
     }
 
     private fun promote() {
@@ -98,6 +116,8 @@ class TimerService : Service() {
             container.timerEngine.rest.value,
         )
         lastPostedAt = System.currentTimeMillis()
+        postedIdle = container.timerEngine.timer.value == null &&
+            container.timerEngine.rest.value == null
 
         runCatching {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {

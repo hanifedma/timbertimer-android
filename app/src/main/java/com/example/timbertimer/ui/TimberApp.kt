@@ -103,6 +103,7 @@ fun TimberApp(
     onLanguageChange: (String) -> Unit,
     onOpenAuthUrl: (String) -> Unit,
     onAddWidget: () -> Unit,
+    onIgnoreBatteryOptimisation: () -> Unit,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -130,6 +131,7 @@ fun TimberApp(
     val volume by viewModel.settings.soundVolume.collectAsStateWithLifecycle()
     val vibrate by viewModel.settings.vibrate.collectAsStateWithLifecycle()
     val idleReminder by viewModel.settings.idleReminder.collectAsStateWithLifecycle()
+    val backgroundSync by viewModel.settings.backgroundSync.collectAsStateWithLifecycle()
 
     // The widget opens the app at a screen rather than wherever it was left.
     LaunchedEffect(requestedDestination) {
@@ -286,6 +288,7 @@ fun TimberApp(
                             volume = volume,
                             vibrate = vibrate,
                             idleReminder = idleReminder,
+                            backgroundSync = backgroundSync,
                             onThemeChange = viewModel.settings::setThemeMode,
                             onLanguageChange = onLanguageChange,
                             onSoundToggle = viewModel::toggleSound,
@@ -293,6 +296,8 @@ fun TimberApp(
                             onVolumeSettled = viewModel::previewSound,
                             onVibrateChange = viewModel.settings::setVibrate,
                             onIdleReminderChange = viewModel::setIdleReminder,
+                            onBackgroundSyncChange = viewModel::setBackgroundSync,
+                            onIgnoreBatteryOptimisation = onIgnoreBatteryOptimisation,
                             onAddWidget = onAddWidget,
                             onSignIn = {
                                 scope.launch {

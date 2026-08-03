@@ -44,6 +44,7 @@ fun SettingsScreen(
     volume: Float,
     vibrate: Boolean,
     idleReminder: Boolean,
+    backgroundSync: Boolean,
     onThemeChange: (ThemeMode) -> Unit,
     onLanguageChange: (String) -> Unit,
     onSoundToggle: () -> Unit,
@@ -51,6 +52,8 @@ fun SettingsScreen(
     onVolumeSettled: () -> Unit,
     onVibrateChange: (Boolean) -> Unit,
     onIdleReminderChange: (Boolean) -> Unit,
+    onBackgroundSyncChange: (Boolean) -> Unit,
+    onIgnoreBatteryOptimisation: () -> Unit,
     onAddWidget: () -> Unit,
     onSignIn: () -> Unit,
     onSignOut: () -> Unit,
@@ -192,6 +195,35 @@ fun SettingsScreen(
                 )
                 Switch(checked = idleReminder, onCheckedChange = onIdleReminderChange)
             }
+        }
+
+        Panel(kicker = stringResource(R.string.settings_background_sync)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = stringResource(R.string.settings_background_sync),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(1f),
+                )
+                Switch(checked = backgroundSync, onCheckedChange = onBackgroundSyncChange)
+            }
+            Text(
+                text = stringResource(R.string.settings_background_sync_desc),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            Spacer(Modifier.height(12.dp))
+
+            OutlinedButton(onClick = onIgnoreBatteryOptimisation, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.settings_battery), textAlign = TextAlign.Center)
+            }
+            Text(
+                text = stringResource(R.string.settings_battery_desc),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 8.dp),
+            )
         }
 
         Panel(kicker = stringResource(R.string.widget_name)) {

@@ -129,7 +129,10 @@ class TimerEngine(
      */
     private fun refreshIdleNudge() {
         val busy = _timer.value != null || _rest.value != null
-        if (busy || foreground || !settings.idleReminder.value) {
+        // With background sync on there is already a permanent notification
+        // saying the same thing; a second one would just be clutter.
+        val covered = settings.backgroundSync.value
+        if (busy || foreground || covered || !settings.idleReminder.value) {
             notifications.cancelIdle()
             return
         }
@@ -367,7 +370,14 @@ class TimerEngine(
     private fun ensureTicking() {
         if (tickJob?.isActive == true) return
         tickJob = scope.launch {
-            while (isActive && (_timer.value != null || _rest.value != null || foreground)) {
+            while (
+                isActive && (
+                    _timer.value != null ||
+                        _rest.value != null ||
+                        foreground ||
+                        settings.backgroundSync.value
+                    )
+            ) {
                 _now.value = System.currentTimeMillis()
 
                 val timer = _timer.value
@@ -399,16 +409,23 @@ class TimerEngine(
         if (repository.session.value == null || completing) return
         val now = System.currentTimeMillis()
 
-        // While the socket is up, changes arrive the moment they happen, so the
-        // poll drops back to being a safety net for a socket that silently died.
-        val interval = if (liveSync.value) LIVE_POLL_MS else CLOUD_POLL_MS
+        // Two axes. A live socket means a change arrives the moment it happens, so
+        // the poll becomes a safety net for a socket that died without saying so.
+        // Being in the background means nobody is watching this screen — but the
+        // widget still is, so the lists cannot stop refreshing entirely, only
+        // slow down.
+        val interval = when {
+            liveSync.value && !foreground -> BACKGROUND_LIVE_POLL_MS
+            liveSync.value -> LIVE_POLL_MS
+            !foreground -> BACKGROUND_POLL_MS
+            else -> CLOUD_POLL_MS
+        }
 
         if (now - lastCloudSyncAt >= interval) {
             lastCloudSyncAt = now
             syncTimersFromCloud()
         }
-        // Both lists are only worth re-reading while someone is looking at them.
-        if (foreground && now - lastListSyncAt >= interval) {
+        if (now - lastListSyncAt >= interval) {
             lastListSyncAt = now
             repository.refreshNotesFromCloud()
 
@@ -487,12 +504,24 @@ class TimerEngine(
         local.writeTimer(synced.toStored())
     }
 
+    /**
+     * The service has two reasons to be alive: a running timer, and background
+     * sync. Without the second, the process only exists while a timer runs or a
+     * screen is open — which is why a task ticked on the phone could sit
+     * unnoticed in the tablet's widget until the app was opened there.
+     */
     private fun syncService() {
-        if (_timer.value != null || _rest.value != null) {
+        if (_timer.value != null || _rest.value != null || settings.backgroundSync.value) {
             TimerService.start(appContext)
         } else {
             TimerService.stop(appContext)
         }
+    }
+
+    /** Called when the background-sync switch is flipped, to start or stop now. */
+    fun onBackgroundSyncChanged() {
+        syncService()
+        if (settings.backgroundSync.value) ensureTicking() else refreshIdleNudge()
     }
 
     private fun ActiveTimer.toStored() = StoredTimer(
@@ -527,5 +556,11 @@ class TimerEngine(
 
         /** Backstop interval while the live socket is connected. */
         const val LIVE_POLL_MS = 60_000L
+
+        /** No screen open, no socket: still keep the widget honest. */
+        const val BACKGROUND_POLL_MS = 60_000L
+
+        /** No screen open and a live socket: purely a safety net. */
+        const val BACKGROUND_LIVE_POLL_MS = 300_000L
     }
 }

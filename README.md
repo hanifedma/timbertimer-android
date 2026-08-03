@@ -30,7 +30,7 @@ Everything the web app does, plus what only a phone can:
 | **Focus history** | Searchable, filterable, editable, with today/total stats. |
 | **Google sync** | The same account, the same four tables, the same rows. |
 | **Light / dark / system**, **English / 한국어** | Switchable in Settings. |
-| **Runs in the background** | A foreground service keeps the countdown alive and on the lock screen. |
+| **Runs in the background** | A foreground service keeps the countdown alive and on the lock screen — and, with background sync on, keeps this device listening for changes even with the app closed. Starts itself after a reboot. |
 | **Notifications** | Live countdown in the shade, Finish and Give up actions, an alert with a buzz when a session lands, and a quiet nudge when you leave the app with nothing running. |
 | **Works offline** | Local-first, with an outbox so a finished session is never lost to a dead network. |
 | **Home screen widget** | Your tasks on the wallpaper. Tick one off in place; tap anything else to open the app on the To-Do tab. |
@@ -84,6 +84,23 @@ seconds — but changes will not be instant.
 immediate with the SQL above, while *phone → website* stays up to 15 seconds
 behind until the web client is taught to subscribe too. That is a change to the
 web repo, not to this one.
+
+## Staying current in the background
+
+By default the app keeps a foreground service running whenever it is installed,
+not only while a timer is going. That service is what holds the live sync
+connection open — and without it the process dies with the last open screen, so a
+task ticked on one device could sit unnoticed in another device's widget until
+something opened the app there.
+
+The price is a permanent quiet notification, which the platform charges for the
+privilege. **Settings → Keep syncing in the background** turns it off if you would
+rather have the notification back and sync only while the app is open.
+
+It restarts itself after a reboot, and **Settings → Ignore battery optimisation**
+opens Android's own exemption dialog. Be aware that no app can truly be immune:
+several manufacturers stop background work regardless of what that dialog says,
+and that is a decision made below the app.
 
 ## The widget
 

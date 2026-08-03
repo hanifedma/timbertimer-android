@@ -109,6 +109,11 @@ class BootCompletedReceiver : BroadcastReceiver() {
         val container = (context.applicationContext as? TimberApplication)?.container ?: return
         val pending = goAsync()
 
+        // Synchronously, and before anything that can suspend: the permission to
+        // start a foreground service from the background is granted here only as
+        // a short allowance tied to this broadcast, and it expires.
+        container.timerEngine.onBackgroundSyncChanged()
+
         container.scope.launch {
             try {
                 container.timerEngine.hydrate()

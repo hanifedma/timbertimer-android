@@ -159,11 +159,14 @@ class TimerNotifications(private val context: Context) {
                     serviceAction(TimerService.ACTION_FINISH_REST),
                 )
         } else {
-            // Only reached in the moment between the last timer ending and the
-            // service stopping; the platform still requires a notification.
+            // Nothing is running, but the service is: this is the background-sync
+            // state. It says what the app is actually doing rather than a bare
+            // app name, since it is the notification the user will see most.
             builder
-                .setContentTitle(context.getString(R.string.app_name))
-                .setContentText(context.getString(R.string.timer_ready))
+                .setContentTitle(context.getString(R.string.notif_sync_title))
+                .setContentText(context.getString(R.string.notif_sync_text))
+                .setShowWhen(false)
+                .setUsesChronometer(false)
         }
 
         return builder.build()
