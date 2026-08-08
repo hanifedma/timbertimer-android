@@ -82,6 +82,26 @@ class SupabaseAuth(
     }
 
     /**
+     * Trades an ID token that Google handed to the app directly for a session.
+     *
+     * This is the whole point of the native sheet: the browser is never
+     * involved, so Google's prompt names *this app* rather than the Supabase
+     * callback the redirect flow has to travel through.
+     *
+     * [rawNonce] is the value Google was asked to hash into the token, and
+     * Supabase re-hashes it to check the token was minted for this request and
+     * not replayed from another one.
+     */
+    suspend fun exchangeGoogleIdToken(idToken: String, rawNonce: String): Session {
+        val payload = buildJsonBody(
+            "provider" to "google",
+            "id_token" to idToken,
+            "nonce" to rawNonce,
+        )
+        return postToken("id_token", payload).toSession().also { sessionStore.save(it) }
+    }
+
+    /**
      * Returns a usable access token, refreshing first when the current one has
      * expired. Returns null when signed out, or when the refresh token has been
      * revoked — in which case the stale session is cleared so the UI drops back

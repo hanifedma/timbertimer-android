@@ -26,6 +26,24 @@ object SupabaseConfig {
     const val REDIRECT_HOST = "auth-callback"
     const val REDIRECT_URL = "$REDIRECT_SCHEME://$REDIRECT_HOST"
 
+    /**
+     * The **web** OAuth client id, copied from the web repo's
+     * `src/supabase-config.js` — the same value both clients use.
+     *
+     * It is the audience of the ID token Google hands back, not a credential:
+     * a client id is public and is meant to be shipped. What actually authorises
+     * *this app* to ask is a separate Android OAuth client registered against
+     * this package name and the signing certificate's SHA-1 fingerprint, which
+     * is why the id alone is safe here.
+     *
+     * With it, sign-in happens in Android's own account sheet and Google's
+     * prompt names this app. Left blank — or if anything about the setup is
+     * missing — sign-in falls back to the browser redirect below, which works
+     * just as well but shows the Supabase callback's address instead.
+     */
+    const val GOOGLE_WEB_CLIENT_ID =
+        "423591952914-13cjnfhqqjs2aq1o6flbdj1dtusruo5g.apps.googleusercontent.com"
+
     const val REST_PATH = "$URL/rest/v1"
     const val AUTH_PATH = "$URL/auth/v1"
 

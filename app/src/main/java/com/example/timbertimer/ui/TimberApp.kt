@@ -45,7 +45,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -68,7 +67,6 @@ import com.example.timbertimer.ui.screens.RecordEditorDialog
 import com.example.timbertimer.ui.screens.RecordsScreen
 import com.example.timbertimer.ui.screens.SettingsScreen
 import com.example.timbertimer.ui.screens.TasksScreen
-import kotlinx.coroutines.launch
 
 /** Wide enough for a side rail instead of a bottom bar. */
 private const val RAIL_WIDTH_DP = 600
@@ -110,12 +108,11 @@ fun TimberApp(
     viewModel: TimberViewModel,
     language: String,
     onLanguageChange: (String) -> Unit,
-    onOpenAuthUrl: (String) -> Unit,
+    onSignIn: () -> Unit,
     onAddWidget: () -> Unit,
     onIgnoreBatteryOptimisation: () -> Unit,
 ) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
     val snackbarHost = remember { SnackbarHostState() }
 
     var destination by rememberSaveable { mutableStateOf(Destination.FOCUS) }
@@ -360,12 +357,7 @@ fun TimberApp(
                                 onIgnoreBatteryOptimisation = onIgnoreBatteryOptimisation,
                                 onAddWidget = onAddWidget,
                                 onManageProjects = { managingProjects = true },
-                                onSignIn = {
-                                    scope.launch {
-                                        val url = viewModel.authorizeUrl()
-                                        if (url != null) onOpenAuthUrl(url)
-                                    }
-                                },
+                                onSignIn = onSignIn,
                                 onSignOut = viewModel::signOut,
                                 onDeleteAll = { confirmDeleteAll = true },
                             )

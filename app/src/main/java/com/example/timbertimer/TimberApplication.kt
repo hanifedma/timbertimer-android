@@ -6,6 +6,7 @@ import com.example.timbertimer.data.TimberRepository
 import com.example.timbertimer.data.local.LocalStore
 import com.example.timbertimer.data.local.SettingsStore
 import com.example.timbertimer.data.local.WidgetNote
+import com.example.timbertimer.data.remote.GoogleSignIn
 import com.example.timbertimer.data.remote.RealtimeClient
 import com.example.timbertimer.data.remote.SupabaseApi
 import com.example.timbertimer.data.remote.SupabaseAuth
@@ -53,6 +54,8 @@ class AppContainer(private val context: Context) {
     private val httpClient = SupabaseAuth.defaultHttpClient()
 
     val auth = SupabaseAuth(context, httpClient, json)
+
+    val googleSignIn = GoogleSignIn()
 
     private val api = SupabaseApi(httpClient, json)
 

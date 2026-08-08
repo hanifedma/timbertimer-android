@@ -37,7 +37,7 @@ Everything the web app does, plus what only a phone can:
 | **Rest stopwatch** | Rest is a project like any other, so a rest can also be added by hand; rests under a minute are dropped. |
 | **To-do list** | Drag by the grip handle to reorder, synced when signed in. |
 | **Focus history** | Searchable, filterable, editable, with today/total stats. |
-| **Google sync** | The same account, the same five tables, the same rows. |
+| **Google sync** | The same account, the same five tables, the same rows — through Android's own account sheet, so the prompt names this app rather than a Supabase address. |
 | **Light / dark / system**, **English / 한국어** | Switchable in Settings. |
 | **Runs in the background** | A foreground service keeps the countdown alive and on the lock screen — and, with background sync on, keeps this device listening for changes even with the app closed. Starts itself after a reboot. |
 | **Notifications** | Live countdown in the shade, Finish and Give up actions, an alert with a buzz when a session lands, and a quiet nudge when you leave the app with nothing running. |
@@ -62,6 +62,32 @@ it is what adds the `projects` table and the `project_id` columns. Until then th
 app still works: projects stay on this device, records are grouped by their title
 as before, and nothing is lost — they simply do not carry their project to the
 cloud.
+
+### Signing in without leaving the app (optional, recommended)
+
+With only the step above, signing in hands off to a browser and returns through
+Supabase's callback — so Google's prompt names `<project>.supabase.co` rather
+than this app. That address is a property of the redirect, not of any branding
+setting, so it cannot be renamed; the only way to be rid of it is not to redirect
+at all.
+
+Asking Google for an ID token on the device does exactly that: Android's own
+account sheet appears, carrying this app's name and icon, and Supabase is never
+mentioned. Three things have to line up:
+
+1. **Google Cloud Console → APIs & Services → Credentials → Create credentials →
+   OAuth client ID → Android.** Package name `com.example.timbertimer`, and the
+   SHA-1 of whichever certificate signs the build you install. This entry is what
+   authorises the app to ask; it does not replace the web client.
+2. **`SupabaseConfig.GOOGLE_WEB_CLIENT_ID`** must hold the *web* client id — the
+   same one the website puts in `src/supabase-config.js`. It is the audience of
+   the token, and a client id is public by design.
+3. **Supabase → Authentication → Providers → Google → Authorized Client IDs** must
+   list that web client id, which is what lets Supabase accept the token.
+
+Anything missing — an unregistered certificate, no Play Services, no Google
+account on the phone — and the app quietly falls back to the browser redirect,
+which keeps working exactly as before.
 
 ## Two more setup steps, both optional
 

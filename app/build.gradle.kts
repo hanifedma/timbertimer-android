@@ -94,6 +94,14 @@ dependencies {
     implementation(libs.androidx.lifecycle.process)
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.browser)
+    // Play Services drags in androidx.fragment 1.0.0 transitively. Gradle already
+    // resolves it upward, but naming a modern one directly is what stops lint
+    // failing the release build over the ActivityResult APIs — and removes any
+    // doubt about which version actually ships.
+    implementation(libs.androidx.fragment)
+    implementation(libs.androidx.credentials)
+    implementation(libs.androidx.credentials.play.services)
+    implementation(libs.google.id)
     implementation(libs.okhttp)
     implementation(libs.kotlinx.serialization.json)
     coreLibraryDesugaring(libs.desugar.jdk.libs)

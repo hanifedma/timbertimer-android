@@ -662,6 +662,23 @@ class TimberViewModel(
     suspend fun authorizeUrl(): String? =
         runCatching { auth.buildAuthorizeUrl() }.getOrNull()
 
+    /**
+     * Finishes a sign-in that Google completed on-device.
+     *
+     * Returns false when Supabase refuses the token — almost always because this
+     * client id is not listed under the Google provider's *Authorized Client
+     * IDs* — so the caller can fall back to the browser rather than leaving the
+     * user staring at a sheet that did nothing.
+     */
+    suspend fun completeGoogleSignIn(idToken: String, rawNonce: String): Boolean =
+        runCatching { auth.exchangeGoogleIdToken(idToken, rawNonce) }
+            .onSuccess {
+                _messages.emit(UiMessage.of(R.string.toast_signed_in, it.label))
+                repository.refresh()
+                engine.hydrate()
+            }
+            .isSuccess
+
     fun handleAuthCallback(uri: Uri) {
         viewModelScope.launch {
             when (val result = auth.readCallback(uri)) {

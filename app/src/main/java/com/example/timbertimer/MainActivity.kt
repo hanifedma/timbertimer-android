@@ -27,8 +27,11 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 import com.example.timbertimer.data.local.LocaleStore
 import com.example.timbertimer.data.local.ThemeMode
+import com.example.timbertimer.data.remote.GoogleSignIn
 import com.example.timbertimer.data.remote.SupabaseConfig
 import com.example.timbertimer.ui.TimberApp
 import com.example.timbertimer.ui.TimberViewModel
@@ -104,7 +107,7 @@ class MainActivity : ComponentActivity() {
                             recreate()
                         }
                     },
-                    onOpenAuthUrl = ::openInCustomTab,
+                    onSignIn = ::signInWithGoogle,
                     onAddWidget = ::requestPinWidget,
                     onIgnoreBatteryOptimisation = ::requestIgnoreBatteryOptimisation,
                 )
@@ -219,9 +222,44 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * Signs in through a Custom Tab rather than a WebView: it shares the device
-     * browser's session, so an account already signed in on the phone needs no
-     * password, and the address bar proves the page really is Google's.
+     * Signs in with Android's own credential sheet, and falls back to the
+     * browser when that is not available.
+     *
+     * The sheet is the better door: it carries this app's name and icon and
+     * never mentions the Supabase callback, which the browser flow has to travel
+     * through and which Google therefore names on its prompt. But it needs Play
+     * Services, a Google account on the device, and this build's signing
+     * certificate registered against the Android OAuth client — so every way it
+     * can be unavailable leads back to the flow that always works.
+     */
+    private fun signInWithGoogle() {
+        lifecycleScope.launch {
+            val container = (application as TimberApplication).container
+            when (val result = container.googleSignIn.requestIdToken(this@MainActivity)) {
+                is GoogleSignIn.Result.Token -> {
+                    if (viewModel.completeGoogleSignIn(result.idToken, result.rawNonce)) return@launch
+                    // Supabase refused the token, most likely because this client
+                    // id is not on its Authorized Client IDs list.
+                    openAuthInBrowser()
+                }
+
+                // Dismissing the sheet is an answer, not a failure.
+                GoogleSignIn.Result.Cancelled -> Unit
+
+                is GoogleSignIn.Result.Unavailable -> openAuthInBrowser()
+            }
+        }
+    }
+
+    private suspend fun openAuthInBrowser() {
+        val url = viewModel.authorizeUrl()
+        if (url != null) openInCustomTab(url)
+    }
+
+    /**
+     * The fallback: a Custom Tab rather than a WebView, because it shares the
+     * device browser's session, so an account already signed in on the phone
+     * needs no password, and the address bar proves the page really is Google's.
      */
     private fun openInCustomTab(url: String) {
         val intent = CustomTabsIntent.Builder().setShowTitle(true).build()

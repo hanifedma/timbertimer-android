@@ -191,6 +191,27 @@ colours a shade off on every tree. `Palette` rounds in the same place.
 own functions under Node. If it ever fails, the port has drifted — fix the port,
 not the test.
 
+## Two doors into the same session
+
+`SupabaseAuth` speaks two grants, and they exist for a presentation reason as
+much as a technical one:
+
+| grant | how it looks |
+|---|---|
+| `pkce` | a Custom Tab hands off to Google and returns through Supabase's callback, so Google's prompt names `<project>.supabase.co` |
+| `id_token` | `GoogleSignIn` asks Credential Manager for a token on-device, so Android's own sheet appears and names *this app* |
+
+The redirect's address is not something branding can change — it is where Google
+is actually returning the user — so the second door is the only way to be rid of
+it. It is also the more fragile one: it needs Play Services, a Google account,
+and this build's signing certificate registered against an Android OAuth client.
+Every way it can fail returns `Unavailable` and falls back to the first door,
+and a failure latches for the session so a second tap does not repeat it.
+
+The nonce is split the same way the web client splits it: Google is given the
+SHA-256 hash, Supabase the original, which is what proves the token was minted
+for this request rather than replayed from another.
+
 ## Notification channels
 
 | Channel | Importance | Why |
