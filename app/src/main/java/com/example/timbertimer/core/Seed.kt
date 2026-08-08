@@ -42,53 +42,35 @@ object Seed {
     }
 
     /**
-     * The species a brand-new session name defaults to.
+     * The web app's `mixedHash`: [hash] with its bits stirred.
      *
-     * The web app mixes the hash before taking it modulo seven, so names spread
-     * across species instead of clustering. That mix runs through a JS `number`
-     * multiply whose result exceeds 2^53 and therefore *loses precision* — and
-     * the lost bits still decide the answer. Doubles are used here for the same
-     * step, and ECMAScript's ToUint32 is spelled out below, so this lands on the
-     * same species the website would show rather than merely a plausible one.
+     * A small modulo taken straight off [hash] is dominated by its low bits, so
+     * names would cluster onto a handful of species and colours. The mix runs
+     * through a JS `number` multiply whose result exceeds 2^53 and therefore
+     * *loses precision* — and the lost bits still decide the answer. Doubles are
+     * used here for the same step, and ECMAScript's ToUint32 is spelled out
+     * below, so this lands on the same value the website computes rather than
+     * merely a plausible one.
      */
-    fun defaultSpeciesFor(title: String?): TreeSpecies {
+    fun mixedHash(value: String): Long {
         // `hash` is a uint32; reinterpreting it as Int gives JS's signed view.
-        var mixed: Int = hash(treeSeed(title) + ":species").toInt()
+        var mixed: Int = hash(value).toInt()
         mixed = mixed xor (mixed ushr 13)
 
         val product: Double = mixed.toDouble() * 0x5BD1E995L.toDouble()
-        var unsigned: Long = toUint32(product)
-        unsigned = (unsigned xor (unsigned ushr 15)) and UINT32_MASK
+        val unsigned: Long = toUint32(product)
+        return (unsigned xor (unsigned ushr 15)) and UINT32_MASK
+    }
 
+    /** The species a brand-new project name defaults to. */
+    fun defaultSpeciesFor(title: String?): TreeSpecies {
         val species = TreeSpecies.choosable
-        return species[(unsigned % species.size).toInt()]
+        return species[(mixedHash(treeSeed(title) + ":species") % species.size).toInt()]
     }
 
-    /**
-     * The leaf and bark colours for a session, as raw HSL.
-     *
-     * Kept as numbers rather than colour objects so the values can be compared
-     * against the website's directly. CSS wraps hues past 360; that wrap is
-     * applied here, since Compose requires them inside the circle.
-     */
-    fun paletteSpec(seedSource: String?): TreePaletteSpec {
-        val seed = hash(treeSeed(seedSource))
-        val hue = 80f + (seed % 94L)
-        val leafSat = 48f + ((seed / 17L) % 18L)
-        val leafLight = 58f + ((seed / 29L) % 13L)
-        val barkHue = 22f + ((seed / 7L) % 32L)
-
-        return TreePaletteSpec(
-            leafA = Hsl(hue, leafSat, leafLight),
-            leafB = Hsl(
-                hue + 14f + (seed % 12L),
-                maxOf(38f, leafSat - 9f),
-                29f + ((seed / 41L) % 10L),
-            ),
-            barkA = Hsl(barkHue, 44f + (seed % 9L), 49f + ((seed / 11L) % 12L)),
-            barkB = Hsl(barkHue, 38f + ((seed / 13L) % 9L), 27f + ((seed / 19L) % 8L)),
-        )
-    }
+    /** The index a name picks out of a palette of [size] colours. */
+    fun colorIndexFor(name: String?, size: Int): Int =
+        (mixedHash(treeSeed(name) + ":color") % size).toInt()
 
     /** ECMAScript ToUint32: truncate toward zero, then take it modulo 2^32. */
     private fun toUint32(value: Double): Long {

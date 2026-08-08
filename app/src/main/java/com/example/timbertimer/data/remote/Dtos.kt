@@ -20,6 +20,7 @@ data class FocusSessionRow(
     val id: String,
     @SerialName("user_id") val userId: String? = null,
     val title: String = "",
+    @SerialName("project_id") val projectId: String? = null,
     @SerialName("duration_minutes") val durationMinutes: Int = 25,
     @SerialName("actual_minutes") val actualMinutes: Int = 0,
     val status: String = "completed",
@@ -32,6 +33,30 @@ data class FocusSessionRow(
 
 @Serializable
 data class FocusSessionInsert(
+    val id: String,
+    @SerialName("user_id") val userId: String,
+    val title: String,
+    @SerialName("project_id") val projectId: String,
+    @SerialName("duration_minutes") val durationMinutes: Int,
+    @SerialName("actual_minutes") val actualMinutes: Int,
+    val status: String,
+    @SerialName("started_at") val startedAt: String,
+    @SerialName("ended_at") val endedAt: String,
+    @SerialName("tree_kind") val treeKind: String,
+    @SerialName("created_at") val createdAt: String,
+    @SerialName("updated_at") val updatedAt: String,
+)
+
+/**
+ * The same insert for a database that predates the projects migration.
+ *
+ * PostgREST rejects the whole request when a body names a column that does not
+ * exist, so a record saved against an un-migrated project has to leave the
+ * field out entirely rather than send null. It still saves, and picks its
+ * project up from its title exactly as it did before.
+ */
+@Serializable
+data class FocusSessionInsertLegacy(
     val id: String,
     @SerialName("user_id") val userId: String,
     val title: String,
@@ -49,12 +74,58 @@ data class FocusSessionInsert(
 @Serializable
 data class FocusSessionUpdate(
     val title: String,
+    @SerialName("project_id") val projectId: String,
     @SerialName("duration_minutes") val durationMinutes: Int,
     @SerialName("actual_minutes") val actualMinutes: Int,
     val status: String,
     @SerialName("started_at") val startedAt: String,
     @SerialName("ended_at") val endedAt: String,
     @SerialName("tree_kind") val treeKind: String,
+    @SerialName("updated_at") val updatedAt: String,
+)
+
+@Serializable
+data class FocusSessionUpdateLegacy(
+    val title: String,
+    @SerialName("duration_minutes") val durationMinutes: Int,
+    @SerialName("actual_minutes") val actualMinutes: Int,
+    val status: String,
+    @SerialName("started_at") val startedAt: String,
+    @SerialName("ended_at") val endedAt: String,
+    @SerialName("tree_kind") val treeKind: String,
+    @SerialName("updated_at") val updatedAt: String,
+)
+
+/** Moving a deleted project's records onto another one, in a single request. */
+@Serializable
+data class SessionProjectUpdate(
+    @SerialName("project_id") val projectId: String,
+    @SerialName("updated_at") val updatedAt: String,
+)
+
+// ---------- projects ----------
+
+@Serializable
+data class ProjectRow(
+    val id: String,
+    @SerialName("user_id") val userId: String? = null,
+    val name: String = "",
+    val color: String = "",
+    val tree: String = "pine",
+    @SerialName("sort_order") val sortOrder: Int = 0,
+    @SerialName("created_at") val createdAt: String? = null,
+    @SerialName("updated_at") val updatedAt: String? = null,
+)
+
+@Serializable
+data class ProjectUpsert(
+    val id: String,
+    @SerialName("user_id") val userId: String,
+    val name: String,
+    val color: String,
+    val tree: String,
+    @SerialName("sort_order") val sortOrder: Int,
+    @SerialName("created_at") val createdAt: String,
     @SerialName("updated_at") val updatedAt: String,
 )
 
@@ -66,6 +137,7 @@ data class ActiveTimerRow(
     @SerialName("timer_id") val timerId: String? = null,
     val mode: String = "countdown",
     val title: String = "",
+    @SerialName("project_id") val projectId: String? = null,
     @SerialName("duration_minutes") val durationMinutes: Int = 0,
     @SerialName("duration_seconds") val durationSeconds: Int = 0,
     @SerialName("started_at") val startedAt: String? = null,
@@ -74,6 +146,21 @@ data class ActiveTimerRow(
 
 @Serializable
 data class ActiveTimerUpsert(
+    @SerialName("user_id") val userId: String,
+    @SerialName("timer_id") val timerId: String,
+    val mode: String,
+    val title: String,
+    @SerialName("project_id") val projectId: String,
+    @SerialName("duration_minutes") val durationMinutes: Int,
+    @SerialName("duration_seconds") val durationSeconds: Int,
+    @SerialName("started_at") val startedAt: String,
+    @SerialName("end_at") val endAt: String,
+    @SerialName("updated_at") val updatedAt: String,
+)
+
+/** Same row without `project_id`, for a database that predates that column. */
+@Serializable
+data class ActiveTimerUpsertLegacy(
     @SerialName("user_id") val userId: String,
     @SerialName("timer_id") val timerId: String,
     val mode: String,

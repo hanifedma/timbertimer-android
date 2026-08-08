@@ -101,6 +101,100 @@ object Time {
             .withZone(zone())
             .format(Instant.ofEpochMilli(millis))
 
+    // ---------- the calendar ----------
+
+    /** "Mon", the column heading for a day. */
+    fun weekdayShort(millis: Long, locale: Locale): String =
+        DateTimeFormatter.ofPattern("EEE", locale).format(localDate(millis))
+
+    /** "08/31" under the weekday — short enough for a one-seventh-wide column. */
+    fun dayAndMonth(millis: Long, locale: Locale): String =
+        DateTimeFormatter.ofPattern("dd/MM", locale).format(localDate(millis))
+
+    /**
+     * The gutter's hour marks: "17" or "5 PM".
+     *
+     * Deliberately shorter than a full time — the gutter is barely wider than
+     * the day columns can spare, and "5:00 PM" would be cut off mid-word.
+     */
+    fun hourLabel(hour: Int, locale: Locale, is24Hour: Boolean): String =
+        DateTimeFormatter
+            .ofPattern(if (is24Hour) "HH" else "h a", locale)
+            .format(java.time.LocalTime.of(hour.coerceIn(0, 23), 0))
+
+    /**
+     * "14:05" or "2:05 PM" — the time alone, for a block that already sits under
+     * its own date.
+     *
+     * [is24Hour] comes from the device setting rather than from the locale,
+     * because Android lets that be overridden and every other clock on the phone
+     * follows the override.
+     */
+    fun timeShort(millis: Long, locale: Locale, is24Hour: Boolean): String =
+        DateTimeFormatter
+            .ofPattern(if (is24Hour) "HH:mm" else "h:mm a", locale)
+            .withZone(zone())
+            .format(Instant.ofEpochMilli(millis))
+
+    /** "Sat, 8 August" for one day, "Aug 8 – Aug 10" for a range of them. */
+    fun calendarRangeLabel(startMillis: Long, days: Int, locale: Locale): String {
+        val first = localDate(startMillis)
+        if (days <= 1) return DateTimeFormatter.ofPattern("EEE, d MMMM", locale).format(first)
+        val last = first.plusDays((days - 1).toLong())
+        val sameMonth = first.month == last.month && first.year == last.year
+        val startText = DateTimeFormatter.ofPattern("MMM d", locale).format(first)
+        val endText = DateTimeFormatter
+            .ofPattern(if (sameMonth) "d" else "MMM d", locale)
+            .format(last)
+        return "$startText – $endText"
+    }
+
+    /** Minutes past local midnight, which is what the calendar lays out against. */
+    fun minutesIntoDay(millis: Long): Int {
+        val dayStart = startOfDay(millis)
+        return ((millis - dayStart) / 60_000L).coerceIn(0L, 1440L).toInt()
+    }
+
+    // ---------- editing an instant ----------
+
+    /** "31 Jul 2026" — the date alone, beside its own time button. */
+    fun dateLabel(millis: Long, locale: Locale): String =
+        DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)
+            .withLocale(locale)
+            .format(localDate(millis))
+
+    fun hourOf(millis: Long): Int =
+        Instant.ofEpochMilli(millis).atZone(zone()).hour
+
+    fun minuteOf(millis: Long): Int =
+        Instant.ofEpochMilli(millis).atZone(zone()).minute
+
+    /**
+     * Material's date picker reports a calendar date as midnight *UTC*, so it has
+     * to be read back in UTC and then re-applied to the local day — reading it in
+     * the device's own zone would land on the day before for anyone east of
+     * Greenwich.
+     */
+    fun withDateFromUtcMillis(millis: Long, utcDateMillis: Long): Long {
+        val date = Instant.ofEpochMilli(utcDateMillis).atZone(java.time.ZoneOffset.UTC).toLocalDate()
+        val time = Instant.ofEpochMilli(millis).atZone(zone()).toLocalTime()
+        return date.atTime(time).atZone(zone()).toInstant().toEpochMilli()
+    }
+
+    /** The same instant's date, as the midnight-UTC value the picker expects. */
+    fun toUtcDateMillis(millis: Long): Long =
+        localDate(millis).atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli()
+
+    fun withTime(millis: Long, hour: Int, minute: Int): Long =
+        Instant.ofEpochMilli(millis)
+            .atZone(zone())
+            .withHour(hour.coerceIn(0, 23))
+            .withMinute(minute.coerceIn(0, 59))
+            .withSecond(0)
+            .withNano(0)
+            .toInstant()
+            .toEpochMilli()
+
     /** `2026-07-31 14:05` for the editable "Started" field. */
     fun editableTimestamp(millis: Long): String =
         DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")

@@ -5,6 +5,9 @@ import com.example.timbertimer.core.focusGrowthStage
 import com.example.timbertimer.data.RecordMapper
 import com.example.timbertimer.data.model.ActiveTimer
 import com.example.timbertimer.data.model.Limits
+import com.example.timbertimer.data.model.Project
+import com.example.timbertimer.data.model.ProjectBook
+import com.example.timbertimer.data.model.Projects
 import com.example.timbertimer.data.model.RecordStatus
 import com.example.timbertimer.data.model.TimerMode
 import com.example.timbertimer.data.model.TreeSpecies
@@ -21,15 +24,13 @@ import java.time.ZoneId
 /** The timer's arithmetic, the record rules, and the calendar boundaries. */
 class TimerLogicTest {
 
-    private val noPreference: (String) -> String? = { null }
-
     // ---------- the running timer ----------
 
     private fun countdown(startedAt: Long, minutes: Int) = ActiveTimer(
         id = "t1",
         mode = TimerMode.COUNTDOWN,
         title = "Deep focus",
-        speciesId = "pine",
+        projectId = Projects.DEFAULT_ID,
         durationMinutes = minutes,
         durationSeconds = minutes * 60,
         startedAt = startedAt,
@@ -80,7 +81,7 @@ class TimerLogicTest {
             id = "t2",
             mode = TimerMode.STOPWATCH,
             title = "Deep focus",
-            speciesId = null,
+            projectId = Projects.DEFAULT_ID,
             durationMinutes = 0,
             durationSeconds = 0,
             startedAt = start,
@@ -102,7 +103,8 @@ class TimerLogicTest {
         assertEquals(25, RecordMapper.cleanMinutes(null, 25, 1))
         assertEquals(1, RecordMapper.cleanMinutes(0, 25, 1))
         assertEquals(0, RecordMapper.cleanMinutes(0, 25, 0))
-        assertEquals(600, RecordMapper.cleanMinutes(5000, 25, 1))
+        // A record may now span a whole day, which is where the ceiling sits.
+        assertEquals(1440, RecordMapper.cleanMinutes(5000, 25, 1))
         assertEquals(42, RecordMapper.cleanMinutes(42, 25, 1))
     }
 
@@ -116,26 +118,32 @@ class TimerLogicTest {
     }
 
     @Test
-    fun `an abandoned session always wilts, whatever was chosen`() {
+    fun `an abandoned session always wilts, whatever its project grows`() {
+        val project = project("work", tree = TreeSpecies.PALM.id)
         assertEquals(
             TreeSpecies.WILTED.label,
-            RecordMapper.pickTreeKind("study", RecordStatus.ABANDONED, "palm", noPreference),
+            RecordMapper.pickTreeKind(project, RecordStatus.ABANDONED),
         )
         assertEquals(
             TreeSpecies.WILTED.label,
-            RecordMapper.resolveTreeKind("palm tree", "study", RecordStatus.ABANDONED, noPreference),
+            RecordMapper.resolveTreeKind("palm tree", RecordStatus.ABANDONED),
         )
     }
 
     @Test
-    fun `an explicit pick wins, and a saved preference beats the default`() {
+    fun `a completed session plants whatever its project grows`() {
         assertEquals(
             TreeSpecies.PALM.label,
-            RecordMapper.pickTreeKind("study", RecordStatus.COMPLETED, "palm", noPreference),
+            RecordMapper.pickTreeKind(project("work", TreeSpecies.PALM.id), RecordStatus.COMPLETED),
         )
+        // Rest legitimately grows the wilted sprout, which is not a "choosable"
+        // species — it still has to come through.
         assertEquals(
-            TreeSpecies.BAMBOO.label,
-            RecordMapper.pickTreeKind("study", RecordStatus.COMPLETED, null) { "bamboo" },
+            TreeSpecies.WILTED.label,
+            RecordMapper.pickTreeKind(
+                Projects.builtIn(Projects.REST_ID, 0L),
+                RecordStatus.COMPLETED,
+            ),
         )
     }
 
@@ -144,6 +152,7 @@ class TimerLogicTest {
         val row = FocusSessionRow(
             id = "r1",
             title = "study",
+            projectId = "p1",
             durationMinutes = 25,
             actualMinutes = 25,
             status = "completed",
@@ -151,53 +160,123 @@ class TimerLogicTest {
             endedAt = "2026-07-31T10:25:00Z",
             treeKind = "palm tree",
         )
-        // Even with a preference saying otherwise, a planted tree keeps its own.
-        assertEquals("palm tree", RecordMapper.normalize(row) { "bamboo" }.treeKind)
+        assertEquals("palm tree", RecordMapper.normalize(row).treeKind)
+        assertEquals("p1", RecordMapper.normalize(row).projectId)
+    }
+
+    // ---------- projects ----------
+
+    @Test
+    fun `a row that carries a project keeps it`() {
+        assertEquals(
+            "t:anything",
+            Projects.resolveId("t:anything", RecordStatus.COMPLETED, "pine tree", "whatever"),
+        )
     }
 
     @Test
-    fun `a rest is a completed record carrying the wilted tree`() {
-        val rest = RecordMapper.normalize(
-            FocusSessionRow(
-                id = "r2",
-                title = Limits.REST_TITLE,
-                durationMinutes = 12,
-                actualMinutes = 12,
-                status = "completed",
-                startedAt = "2026-07-31T10:00:00Z",
-                endedAt = "2026-07-31T10:12:00Z",
-                treeKind = TreeSpecies.WILTED.label,
-            ),
-            noPreference,
+    fun `a record written before projects existed is mapped by its shape`() {
+        // A completed wilted tree was a rest.
+        assertEquals(
+            Projects.REST_ID,
+            Projects.resolveId(null, RecordStatus.COMPLETED, TreeSpecies.WILTED.label, "Rest"),
         )
-        assertTrue(rest.isRest)
-        assertEquals(TreeSpecies.WILTED, rest.species)
-
-        val focus = RecordMapper.normalize(
-            FocusSessionRow(
-                id = "r3",
-                title = "study",
-                status = "completed",
-                startedAt = "2026-07-31T10:00:00Z",
-                endedAt = "2026-07-31T10:25:00Z",
-                treeKind = "pine tree",
-            ),
-            noPreference,
+        // Anything else keys off its title, case- and space-insensitively.
+        assertEquals(
+            "t:deep focus",
+            Projects.resolveId(null, RecordStatus.COMPLETED, "pine tree", "  Deep Focus "),
         )
-        assertFalse(focus.isRest)
+        assertEquals(
+            "t:deep focus",
+            Projects.resolveId(null, RecordStatus.COMPLETED, "pine tree", ""),
+        )
+        // An abandoned session wilts too, but it was never a rest.
+        assertEquals(
+            "t:study",
+            Projects.resolveId(null, RecordStatus.ABANDONED, TreeSpecies.WILTED.label, "study"),
+        )
+        // A blank id is not an id.
+        assertEquals(
+            "t:study",
+            Projects.resolveId("  ", RecordStatus.COMPLETED, "pine tree", "study"),
+        )
     }
 
     @Test
-    fun `a legacy row with an unknown tree gets a derived one`() {
-        val row = FocusSessionRow(
-            id = "r4",
-            title = "study",
-            status = "completed",
-            startedAt = "2026-07-31T10:00:00Z",
-            treeKind = "young sprout",
+    fun `the two built-ins are what a fresh install starts with`() {
+        val focus = Projects.builtIn(Projects.DEFAULT_ID, 0L)
+        val rest = Projects.builtIn(Projects.REST_ID, 0L)
+        assertEquals(Projects.COLORS[0], focus.color)
+        assertEquals(TreeSpecies.PINE.id, focus.tree)
+        assertEquals(Projects.REST_COLOR, rest.color)
+        assertEquals(TreeSpecies.WILTED.id, rest.tree)
+        assertTrue(focus.isBuiltIn && rest.isBuiltIn)
+    }
+
+    @Test
+    fun `Focus sorts first and Rest last, whatever they are called`() {
+        val order = Projects.sorted(
+            listOf(
+                project("zebra"),
+                Projects.builtIn(Projects.REST_ID, 0L),
+                project("apple"),
+                Projects.builtIn(Projects.DEFAULT_ID, 0L),
+            )
+        ).map { it.id }
+        assertEquals(Projects.DEFAULT_ID, order.first())
+        assertEquals(Projects.REST_ID, order.last())
+        assertEquals(listOf("apple", "zebra"), order.subList(1, 3))
+    }
+
+    @Test
+    fun `a record whose project was deleted still renders, in neutral grey`() {
+        val book = ProjectBook(listOf(Projects.builtIn(Projects.DEFAULT_ID, 0L)))
+        val missing = book["gone"]
+        assertTrue(missing.missing)
+        assertEquals(Projects.MISSING_COLOR, missing.color)
+
+        // And it falls back to the species written on the record itself.
+        val record = record(projectId = "gone", treeKind = TreeSpecies.KAPOK.label)
+        assertEquals(TreeSpecies.KAPOK, book.speciesFor(record))
+    }
+
+    @Test
+    fun `the project decides how a record is drawn, so recolouring re-plants it`() {
+        val book = ProjectBook(listOf(project("work", tree = TreeSpecies.BAMBOO.id)))
+        // The record was planted as a pine; its project now grows bamboo.
+        val record = record(projectId = "work", treeKind = TreeSpecies.PINE.label)
+        assertEquals(TreeSpecies.BAMBOO, book.speciesFor(record))
+
+        // An abandoned one wilts regardless.
+        assertEquals(
+            TreeSpecies.WILTED,
+            book.speciesFor(record.copy(status = RecordStatus.ABANDONED)),
         )
-        val kind = RecordMapper.normalize(row, noPreference).treeKind
-        assertTrue(kind in TreeSpecies.choosable.map { it.label })
+    }
+
+    @Test
+    fun `a rest is any record filed under the Rest project`() {
+        assertTrue(record(projectId = Projects.REST_ID).isRest)
+        assertFalse(record(projectId = Projects.DEFAULT_ID).isRest)
+        // Including one added by hand that grows something other than a sprout.
+        assertTrue(record(projectId = Projects.REST_ID, treeKind = TreeSpecies.PALM.label).isRest)
+    }
+
+    @Test
+    fun `a project name is trimmed and capped to what the column accepts`() {
+        val project = Projects.normalize(
+            id = "p",
+            name = "  " + "x".repeat(200) + "  ",
+            color = "nonsense",
+            tree = "not a tree",
+            sortOrder = 0,
+            createdAt = 0L,
+            updatedAt = 0L,
+        )
+        assertEquals(Projects.NAME_MAX, project.name.length)
+        // An unusable colour and tree fall back to the ones the name would pick.
+        assertEquals(Projects.colorForName(project.name), project.color)
+        assertEquals(Projects.treeForName(project.name), project.tree)
     }
 
     // ---------- time ----------
@@ -270,11 +349,41 @@ class TimerLogicTest {
     }
 
     @Test
-    fun `the editable timestamp round trips through what the user sees`() {
-        val millis = Time.parseEditableTimestamp("2026-07-31 14:05")
-        assertEquals("2026-07-31 14:05", Time.editableTimestamp(millis!!))
-        assertNull(Time.parseEditableTimestamp("31/07/2026"))
-        assertNull(Time.parseEditableTimestamp(""))
+    fun `minutes into the day are measured against local midnight`() {
+        val start = Time.startOfDay(System.currentTimeMillis())
+        assertEquals(0, Time.minutesIntoDay(start))
+        assertEquals(90, Time.minutesIntoDay(start + 90 * 60_000L))
+        assertEquals(1439, Time.minutesIntoDay(start + 1439 * 60_000L))
+        // Always measured against the instant's *own* midnight, so nothing can
+        // ever be placed off the bottom of the grid.
+        assertTrue(Time.minutesIntoDay(start + 40 * 3_600_000L) in 0..1440)
+        assertTrue(Time.minutesIntoDay(start - 3_600_000L) in 0..1440)
+    }
+
+    @Test
+    fun `the date picker's UTC midnight is read back as the same local day`() {
+        val millis = Instant.parse("2026-07-31T22:30:00Z").toEpochMilli()
+        val utcDate = Time.toUtcDateMillis(millis)
+        // Re-applying the day the picker reports must not move the record.
+        assertEquals(
+            Time.localDateKey(millis),
+            Time.localDateKey(Time.withDateFromUtcMillis(millis, utcDate)),
+        )
+        assertEquals(
+            Time.hourOf(millis) to Time.minuteOf(millis),
+            Time.hourOf(Time.withDateFromUtcMillis(millis, utcDate)) to
+                Time.minuteOf(Time.withDateFromUtcMillis(millis, utcDate)),
+        )
+    }
+
+    @Test
+    fun `setting a time keeps the day and drops the stray seconds`() {
+        val millis = Instant.parse("2026-07-31T10:00:33.500Z").toEpochMilli()
+        val moved = Time.withTime(millis, 14, 5)
+        assertEquals(14, Time.hourOf(moved))
+        assertEquals(5, Time.minuteOf(moved))
+        assertEquals(0L, moved % 60_000L)
+        assertEquals(Time.localDateKey(millis), Time.localDateKey(moved))
     }
 
     @Test
@@ -288,4 +397,34 @@ class TimerLogicTest {
         assertEquals(3, focusGrowthStage(46))
         assertEquals(3, focusGrowthStage(600))
     }
+
+    // ---------- fixtures ----------
+
+    private fun project(id: String, tree: String = TreeSpecies.PINE.id) = Project(
+        id = id,
+        name = id,
+        color = Projects.colorForName(id),
+        tree = tree,
+        sortOrder = 1,
+        createdAt = 0L,
+        updatedAt = 0L,
+    )
+
+    private fun record(
+        projectId: String,
+        treeKind: String = TreeSpecies.PINE.label,
+        status: RecordStatus = RecordStatus.COMPLETED,
+    ) = com.example.timbertimer.data.model.FocusRecord(
+        id = "r",
+        title = "study",
+        projectId = projectId,
+        durationMinutes = 25,
+        actualMinutes = 25,
+        status = status,
+        startedAt = 0L,
+        endedAt = 25 * 60_000L,
+        treeKind = treeKind,
+        createdAt = 0L,
+        updatedAt = 0L,
+    )
 }

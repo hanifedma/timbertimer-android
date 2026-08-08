@@ -65,6 +65,11 @@ enum class TimerMode(val wire: String) {
 data class FocusRecord(
     val id: String,
     val title: String,
+    /**
+     * Always resolved, never null: a row written before projects existed is
+     * mapped to one here, so nothing downstream has to know about two shapes.
+     */
+    val projectId: String,
     val durationMinutes: Int,
     val actualMinutes: Int,
     val status: RecordStatus,
@@ -74,17 +79,22 @@ data class FocusRecord(
     val createdAt: Long,
     val updatedAt: Long,
 ) {
-    /**
-     * Rests are stored as completed records carrying the wilted tree, so they
-     * show up in the forest but never in the focus stats.
-     */
-    val isRest: Boolean
-        get() = status == RecordStatus.COMPLETED && treeKind == TreeSpecies.WILTED.label
+    /** Rest is just a project now, which is what makes rests addable by hand. */
+    val isRest: Boolean get() = projectId == Projects.REST_ID
 
-    /** The species to draw. Abandoned sessions always wilt, whatever was chosen. */
-    val species: TreeSpecies
-        get() = when {
-            status == RecordStatus.ABANDONED -> TreeSpecies.WILTED
+    /** How long the block is: what was actually spent, at least a visible minute. */
+    val minutes: Int get() = maxOf(actualMinutes, 0)
+
+    /** The end the calendar draws to, kept consistent with [minutes]. */
+    val endsAt: Long get() = maxOf(endedAt, startedAt)
+
+    /**
+     * The species written on this record. Only used where the project is
+     * unknown — a [ProjectBook] is what decides how a record is actually drawn.
+     */
+    val storedSpecies: TreeSpecies
+        get() = when (status) {
+            RecordStatus.ABANDONED -> TreeSpecies.WILTED
             else -> TreeSpecies.byLabelOrId(treeKind) ?: TreeSpecies.PINE
         }
 }
@@ -110,7 +120,8 @@ data class ActiveTimer(
     val id: String,
     val mode: TimerMode,
     val title: String,
-    val speciesId: String?,
+    /** The project this session will be filed under, and whose tree it grows. */
+    val projectId: String,
     val durationMinutes: Int,
     val durationSeconds: Int,
     val startedAt: Long,
@@ -158,8 +169,14 @@ object Limits {
     /** `notes.text` is `char_length(text) between 1 and 500`. */
     const val NOTE_MAX = 500
 
-    /** Both `duration_minutes` and `actual_minutes` are capped at 600. */
-    const val MINUTES_MAX = 600
+    /**
+     * A record may now span at most one day. The calendar edits real start and
+     * end times, and the table's CHECK constraints allow the same ceiling.
+     */
+    const val MINUTES_MAX = 1440
+
+    /** The longest countdown the timer form offers — a day-long one is a mistake. */
+    const val TIMER_MINUTES_MAX = 600
 
     const val DEFAULT_DURATION = 25
 

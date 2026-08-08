@@ -3,6 +3,7 @@ package com.example.timbertimer.data.local
 import android.content.Context
 import com.example.timbertimer.data.remote.FocusSessionRow
 import com.example.timbertimer.data.remote.NoteRow
+import com.example.timbertimer.data.remote.ProjectRow
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.serializer
@@ -66,6 +67,7 @@ class LocalStore(context: Context) {
             .remove(KEY_CLOUD_USER)
             .remove(KEY_CLOUD_SESSIONS)
             .remove(KEY_CLOUD_NOTES)
+            .remove(KEY_CLOUD_PROJECTS)
             .remove(KEY_PENDING)
             .apply()
     }
@@ -86,6 +88,29 @@ class LocalStore(context: Context) {
     fun writePending(userId: String, rows: List<FocusSessionRow>) {
         prefs.edit().putString(KEY_CLOUD_USER, userId).apply()
         write(KEY_PENDING, FocusSessionRow.serializer(), rows)
+    }
+
+    // ---------- projects ----------
+
+    /**
+     * The projects a signed-out user has made on this device.
+     *
+     * Kept apart from the signed-in mirror below for the same reason records
+     * are: project names are the user's own words, and one account's must never
+     * surface under another's, or as "local" projects after signing out.
+     */
+    fun readProjects(): List<ProjectRow> = read(KEY_PROJECTS, ProjectRow.serializer())
+
+    fun writeProjects(rows: List<ProjectRow>) = write(KEY_PROJECTS, ProjectRow.serializer(), rows)
+
+    /** The last projects seen in the cloud, so an offline start still has colours. */
+    fun readCloudProjects(userId: String): List<ProjectRow> =
+        if (cachedUserId() == userId) read(KEY_CLOUD_PROJECTS, ProjectRow.serializer())
+        else emptyList()
+
+    fun writeCloudProjects(userId: String, rows: List<ProjectRow>) {
+        prefs.edit().putString(KEY_CLOUD_USER, userId).apply()
+        write(KEY_CLOUD_PROJECTS, ProjectRow.serializer(), rows)
     }
 
     // ---------- to-do ----------
@@ -165,6 +190,8 @@ class LocalStore(context: Context) {
         const val KEY_CLOUD_SESSIONS = "cloud-sessions"
         const val KEY_CLOUD_NOTES = "cloud-notes"
         const val KEY_PENDING = "pending-sessions"
+        const val KEY_PROJECTS = "projects"
+        const val KEY_CLOUD_PROJECTS = "cloud-projects"
         const val KEY_NOTES = "notes"
         const val KEY_NOTES_ORDER = "notes-order"
         const val KEY_WIDGET_NOTES = "widget-notes"
@@ -192,7 +219,8 @@ data class StoredTimer(
     val id: String,
     val mode: String,
     val title: String,
-    val speciesId: String? = null,
+    /** Absent in timers written by an older build; those fall back to Focus. */
+    val projectId: String? = null,
     val durationMinutes: Int,
     val durationSeconds: Int,
     val startedAt: Long,

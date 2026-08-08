@@ -12,14 +12,17 @@ app/src/main/java/com/example/timbertimer/
   MainActivity.kt        deep links, widget destinations, system bar styling
 
   core/                  no Android, no Compose — the parts worth unit testing
-    Seed.kt              the seeded tree maths, ported bit-for-bit from the web
+    Seed.kt              the name -> species/colour hash, bit-for-bit from the web
+    Palette.kt           a project colour -> the four colours a tree is drawn with
+    CalendarLayout.kt    records -> per-day blocks, packed into columns
     Time.kt              clock, calendar boundaries, ISO-8601
     UiMessage.kt         a message as a resource id, resolved at display time
 
   data/
     model/Models.kt      FocusRecord, Note, ActiveTimer, RestTimer, TreeSpecies
+    model/Project.kt     Project, the built-ins, and the ProjectBook lookups
     RecordMapper.kt      row <-> record, with the table's CHECK constraints
-    TimberRepository.kt  the single source of truth for records and to-dos
+    TimberRepository.kt  the single source of truth for projects, records, to-dos
     local/               SharedPreferences: records, notes, settings, locale
     remote/              Supabase auth (PKCE), PostgREST, Realtime
 
@@ -36,6 +39,62 @@ app/src/main/java/com/example/timbertimer/
 
 Dependencies point inward: `ui` knows about `data`, `data` knows about nothing
 above it, and `core` knows about neither.
+
+## A project owns the colour and the tree; a record only points at one
+
+`FocusRecord.projectId` is the only link. How a record is *drawn* is asked of the
+`ProjectBook`, never of the record:
+
+```kotlin
+fun speciesFor(record: FocusRecord): TreeSpecies {
+    if (record.status == RecordStatus.ABANDONED) return TreeSpecies.WILTED
+    val project = projectFor(record)
+    if (!project.missing) return project.species
+    return TreeSpecies.byLabelOrId(record.treeKind) ?: TreeSpecies.PINE
+}
+```
+
+That is what makes recolouring a project re-plant its whole forest at once. The
+`tree_kind` still written on every row is the fallback for a record whose project
+was deleted on another device, and the value the web client reads.
+
+Ids are plain strings rather than UUIDs, which is what lets two devices invent
+the same project without coordinating:
+
+| id | what it is |
+|---|---|
+| `focus`, `rest` | the two built-ins, seeded on a fresh install, never deletable |
+| `t:deep focus` | a record written *before* projects existed, mapped by its title |
+| a UUID | anything the user made |
+
+`Projects.resolveId` does that mapping at the boundary, so nothing above
+`RecordMapper` ever sees a row without a project. A completed record carrying the
+wilted tree was a rest; anything else keys off its lowercased title. Colours and
+species come from `Seed.mixedHash`, so "Reading" is the same indigo pine on every
+device with nothing written down first.
+
+**The projects table is optional.** `projectsTableMissing`,
+`sessionProjectColumnMissing` and `activeTimerProjectColumnMissing` each latch on
+the first rejection and drop the field from subsequent writes — PostgREST refuses
+a whole request that names a column which does not exist, so a record saved
+against a database that predates the migration has to omit it rather than send
+null. The app keeps working; projects simply stay on the device.
+
+## The calendar's layout is a plain function
+
+`buildSegments` splits every record into per-day pieces — a session across
+midnight appears in both columns, marked `partial` so neither half offers a drag
+— and `pack` gives overlapping pieces a column each. Both are ordinary Kotlin in
+`core/`, because that is where a day grid actually goes wrong and it is far
+easier to pin down in `CalendarLayoutTest` than by dragging blocks on a device.
+
+The screen is left with placing rectangles and reading one gesture. That gesture
+is hand-written rather than composed from `detectTapGestures` +
+`detectDragGesturesAfterLongPress`, for one reason: **nothing may be consumed
+until a long press has actually happened.** A finger that moves before then is
+scrolling the day, and the scroller above has to be free to take it. Stacking the
+stock detectors does not work either — `detectTapGestures` consumes the down
+event, which cancels the drag detector's long press.
 
 ## The timer does not count down
 
@@ -92,7 +151,7 @@ re-derived or re-entered.
 
 ## Realtime decides *when*, never *what*
 
-`RealtimeClient` subscribes to all four tables over a Phoenix websocket. A change
+`RealtimeClient` subscribes to all five tables over a Phoenix websocket. A change
 of any kind triggers a full reconcile through the ordinary load path, rather than
 applying the row delta.
 
@@ -106,12 +165,12 @@ replication, which no project does by default, so a refused channel has to
 degrade to the old 15-second poll rather than to silence. `connected` is what
 the engine reads to stretch that poll to 60 seconds while the socket is up.
 
-## `core/Seed.kt` is a bit-for-bit port
+## `core/Seed.kt` and `core/Palette.kt` are bit-for-bit ports
 
-The web client derives a tree's species and colours from a hash of the session
-name. Reproducing it *approximately* would mean the same session grows a
-different tree on each client — visible, unexplainable, and impossible to fix
-later without rewriting history.
+The web client derives a project's species and colour from a hash of its name,
+and its tree's four colours from that colour. Reproducing either *approximately*
+would mean the same project looks different on each client — visible,
+unexplainable, and impossible to fix later without rewriting history.
 
 The subtle part is the species mix:
 
@@ -124,9 +183,13 @@ bits decide the answer. `Seed.defaultSpeciesFor` performs the same step in
 `Double` and spells out ECMAScript's `ToUint32`, so it lands on the same species
 rather than a plausible one.
 
-`SeedParityTest` pins this against values generated by running the website's own
-functions under Node. If it ever fails, the port has drifted — fix the port, not
-the test.
+The colour arithmetic has a quieter trap: the web builds a CSS `hsl()` string,
+which **rounds every component to a whole number**. Skipping that rounding leaves
+colours a shade off on every tree. `Palette` rounds in the same place.
+
+`SeedParityTest` pins all of it against values generated by running the website's
+own functions under Node. If it ever fails, the port has drifted — fix the port,
+not the test.
 
 ## Notification channels
 
@@ -164,14 +227,21 @@ Two constraints that are easy to trip over:
 
 ## Testing
 
-`./gradlew testDebugUnitTest` — 26 tests, all off-device:
+`./gradlew testDebugUnitTest` — 49 tests, all off-device:
 
-- **`SeedParityTest`** — the hash, species, palette and jitter against Node-generated
-  expectations from the web client.
+- **`SeedParityTest`** — the hash, the species and colour a name picks, the tree
+  palette a colour produces, the readable ink per theme, and the jitter, against
+  Node-generated expectations from the web client.
 - **`TimerLogicTest`** — clock-derived timing including the reboot case, the
-  table's clamps, species fallbacks, rest detection, Sunday-start weeks, and both
-  timestamp shapes Postgres and the web client write.
+  table's clamps, how a pre-projects row is mapped to a project, the built-ins'
+  sort order, the deleted-project fallback, Sunday-start weeks, and both
+  timestamp shapes Postgres and the web client write. The date picker's
+  midnight-UTC round trip is here too: reading it back in the device's own zone
+  lands on the day before for anyone east of Greenwich.
+- **`CalendarLayoutTest`** — the day a record lands on, the split across
+  midnight, the padding that keeps a one-minute record tappable, and the column
+  packing (including a freed lane being reused rather than widening the run).
 
 `core/` and `data/` are deliberately free of Android imports so this stays
-possible; `Seed.kt` in particular has no Compose import, which is why the palette
-is returned as raw HSL and converted in `ui/`.
+possible; `Seed.kt` and `Palette.kt` in particular have no Compose import, which
+is why colours are returned as raw HSL and converted in `ui/`.

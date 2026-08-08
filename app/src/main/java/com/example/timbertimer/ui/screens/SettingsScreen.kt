@@ -55,6 +55,7 @@ fun SettingsScreen(
     onBackgroundSyncChange: (Boolean) -> Unit,
     onIgnoreBatteryOptimisation: () -> Unit,
     onAddWidget: () -> Unit,
+    onManageProjects: () -> Unit,
     onSignIn: () -> Unit,
     onSignOut: () -> Unit,
     onDeleteAll: () -> Unit,
@@ -95,6 +96,18 @@ fun SettingsScreen(
                     Text(stringResource(R.string.account_sign_out))
                 }
             }
+        }
+
+        Panel(kicker = stringResource(R.string.project_kicker)) {
+            OutlinedButton(onClick = onManageProjects, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.project_manage), textAlign = TextAlign.Center)
+            }
+            Text(
+                text = stringResource(R.string.project_manage_desc),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 8.dp),
+            )
         }
 
         Panel(kicker = stringResource(R.string.settings_appearance)) {

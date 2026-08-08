@@ -13,10 +13,10 @@ import com.example.timbertimer.data.local.StoredTimer
 import com.example.timbertimer.data.model.ActiveTimer
 import com.example.timbertimer.data.model.FocusRecord
 import com.example.timbertimer.data.model.Limits
+import com.example.timbertimer.data.model.Projects
 import com.example.timbertimer.data.model.RecordStatus
 import com.example.timbertimer.data.model.RestTimer
 import com.example.timbertimer.data.model.TimerMode
-import com.example.timbertimer.data.model.TreeSpecies
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -192,15 +192,19 @@ class TimerEngine(
 
     // ---------- starting and stopping ----------
 
-    suspend fun start(title: String, mode: TimerMode, minutes: Int, speciesId: String?) {
+    suspend fun start(title: String, mode: TimerMode, minutes: Int, projectId: String) {
         if (_timer.value != null) return
 
-        val cleanTitle = RecordMapper.cleanTitle(title)
+        val project = repository.projects.value[projectId]
+        // An empty task name falls back to the project's, so picking a project
+        // and pressing Start is enough.
+        val cleanTitle = RecordMapper.cleanTitle(title.ifBlank { project.name })
         settings.setSessionName(cleanTitle)
+        repository.rememberTaskProject(cleanTitle, project.id)
         finishSoonPlayedFor = null
 
         val stopwatch = mode == TimerMode.STOPWATCH
-        val safeMinutes = if (stopwatch) 0 else minutes.coerceIn(1, Limits.MINUTES_MAX)
+        val safeMinutes = if (stopwatch) 0 else minutes.coerceIn(1, Limits.TIMER_MINUTES_MAX)
         val startedAt = System.currentTimeMillis()
         // A stopwatch has no goal, so its end is parked 24h out — the same
         // convention the web app uses, and the table's own seconds ceiling.
@@ -210,7 +214,7 @@ class TimerEngine(
             id = UUID.randomUUID().toString(),
             mode = mode,
             title = cleanTitle,
-            speciesId = speciesId,
+            projectId = project.id,
             durationMinutes = safeMinutes,
             durationSeconds = if (stopwatch) 0 else durationSeconds,
             startedAt = startedAt,
@@ -279,6 +283,7 @@ class TimerEngine(
             val record = FocusRecord(
                 id = UUID.randomUUID().toString(),
                 title = timer.title,
+                projectId = timer.projectId,
                 durationMinutes = if (stopwatch) max(1, actual) else timer.durationMinutes,
                 actualMinutes = when {
                     stopwatch -> actual
@@ -292,9 +297,7 @@ class TimerEngine(
                 status = status,
                 startedAt = timer.startedAt,
                 endedAt = endedAt,
-                treeKind = RecordMapper.pickTreeKind(timer.title, status, timer.speciesId) {
-                    settings.treePreference(it)
-                },
+                treeKind = RecordMapper.pickTreeKind(repository.projects.value, timer.projectId, status),
                 createdAt = endedAt,
                 updatedAt = endedAt,
             )
@@ -352,12 +355,19 @@ class TimerEngine(
             FocusRecord(
                 id = UUID.randomUUID().toString(),
                 title = Limits.REST_TITLE,
+                projectId = Projects.REST_ID,
                 durationMinutes = minutes,
                 actualMinutes = minutes,
                 status = RecordStatus.COMPLETED,
                 startedAt = rest.startedAt,
                 endedAt = endedAt,
-                treeKind = TreeSpecies.WILTED.label,
+                // Rest is a project like any other, so it plants whatever tree
+                // that project grows — a wilted sprout unless it was changed.
+                treeKind = RecordMapper.pickTreeKind(
+                    repository.projects.value,
+                    Projects.REST_ID,
+                    RecordStatus.COMPLETED,
+                ),
                 createdAt = endedAt,
                 updatedAt = endedAt,
             )
@@ -436,6 +446,7 @@ class TimerEngine(
             // event is dropped. Without this poll, a session deleted on another
             // device stayed on screen until the app was reopened.
             repository.refreshRecordsFromCloud()
+            repository.refreshProjectsFromCloud()
         }
     }
 
@@ -528,7 +539,7 @@ class TimerEngine(
         id = id,
         mode = mode.wire,
         title = title,
-        speciesId = speciesId,
+        projectId = projectId,
         durationMinutes = durationMinutes,
         durationSeconds = durationSeconds,
         startedAt = startedAt,
@@ -540,7 +551,7 @@ class TimerEngine(
         id = id,
         mode = TimerMode.from(mode),
         title = RecordMapper.cleanTitle(title),
-        speciesId = speciesId,
+        projectId = projectId?.ifBlank { null } ?: Projects.DEFAULT_ID,
         durationMinutes = durationMinutes,
         durationSeconds = durationSeconds,
         startedAt = startedAt,

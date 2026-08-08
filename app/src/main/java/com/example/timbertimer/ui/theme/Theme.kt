@@ -6,6 +6,8 @@ import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -114,9 +116,20 @@ fun TimberTimerTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit,
 ) {
-    MaterialTheme(
-        colorScheme = if (darkTheme) DarkColors else LightColors,
-        typography = TimberTypography,
-        content = content,
-    )
+    CompositionLocalProvider(LocalIsDarkTheme provides darkTheme) {
+        MaterialTheme(
+            colorScheme = if (darkTheme) DarkColors else LightColors,
+            typography = TimberTypography,
+            content = content,
+        )
+    }
 }
+
+/**
+ * Whether the app is currently drawing its dark appearance.
+ *
+ * Project colours are adjusted for contrast per theme, and the only honest
+ * source for "which theme" is the one the shell chose — the device's own dark
+ * mode says nothing when the user has overridden it inside the app.
+ */
+val LocalIsDarkTheme = staticCompositionLocalOf { true }

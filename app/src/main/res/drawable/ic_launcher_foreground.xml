@@ -3,9 +3,16 @@
   The sprout from assets/canopy-logo.svg, path for path, in the favicon's own
   128x128 coordinate system.
 
-  The group re-centres it: the artwork's bounding box sits at (67.75, 66.75)
-  rather than the canvas centre, and 0.88 pulls the ground line's left end
-  inside the adaptive icon's safe circle, which a full-size copy would clip.
+  The group both re-centres and shrinks it. The artwork's bounding box is centred
+  on (67.75, 66.75) rather than on the canvas, so the pivot sits there and the
+  translate carries that point to (64, 64).
+
+  0.68 is the size. Only the middle 66% of an adaptive icon survives the
+  launcher's mask, and a glyph is meant to sit *inside* that circle rather than
+  fill it — at the previous 0.88 the sprout ran almost edge to edge and read as
+  cramped next to every other icon on the home screen. This leaves it about 60%
+  of the visible circle, which is the usual keyline for a shape on a coloured
+  background.
 
   Doubles as the monochrome icon — themed launchers tint the strokes flat and
   the shape still reads.
@@ -18,8 +25,8 @@
     <group
         android:pivotX="67.75"
         android:pivotY="66.75"
-        android:scaleX="0.88"
-        android:scaleY="0.88"
+        android:scaleX="0.68"
+        android:scaleY="0.68"
         android:translateX="-3.75"
         android:translateY="-2.75">
         <path

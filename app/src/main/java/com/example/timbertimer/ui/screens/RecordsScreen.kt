@@ -2,13 +2,17 @@ package com.example.timbertimer.ui.screens
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -29,15 +33,19 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.timbertimer.R
-import com.example.timbertimer.core.Seed
 import com.example.timbertimer.core.Time
 import com.example.timbertimer.data.model.FocusRecord
+import com.example.timbertimer.data.model.Limits
+import com.example.timbertimer.data.model.ProjectBook
 import com.example.timbertimer.data.model.RecordStatus
 import com.example.timbertimer.ui.components.Panel
+import com.example.timbertimer.ui.components.ProjectChip
 import com.example.timbertimer.ui.components.SegmentedRow
 import com.example.timbertimer.ui.components.TreeArt
-import com.example.timbertimer.ui.components.treePalette
+import com.example.timbertimer.ui.components.ClockFormat
 import com.example.timbertimer.ui.components.currentLocale
+import com.example.timbertimer.ui.components.rememberClockFormat
+import com.example.timbertimer.ui.components.rememberTreePalette
 import java.util.Locale
 
 /** Filter options, with null standing for "all". */
@@ -51,6 +59,7 @@ private val FILTERS = listOf<RecordStatus?>(null, RecordStatus.COMPLETED, Record
 fun RecordsScreen(
     records: List<FocusRecord>,
     allRecords: List<FocusRecord>,
+    book: ProjectBook,
     query: String,
     status: RecordStatus?,
     onQueryChange: (String) -> Unit,
@@ -58,9 +67,11 @@ fun RecordsScreen(
     onAdd: () -> Unit,
     onEdit: (FocusRecord) -> Unit,
     onDelete: (FocusRecord) -> Unit,
+    contentPadding: PaddingValues,
     modifier: Modifier = Modifier,
 ) {
     val locale = currentLocale()
+    val clock = rememberClockFormat()
     val minuteUnit = stringResource(R.string.unit_m)
     val hourUnit = stringResource(R.string.unit_h)
 
@@ -72,83 +83,91 @@ fun RecordsScreen(
         .sumOf { it.actualMinutes }
     val totalMinutes = focus.sumOf { it.actualMinutes }
 
-    Column(modifier = modifier.fillMaxWidth()) {
-        Panel(
-            kicker = stringResource(R.string.records_kicker),
-            title = stringResource(R.string.records_title),
-            trailing = {
-                IconButton(onClick = onAdd) {
-                    Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.records_add))
+    LazyColumn(
+        modifier = modifier.fillMaxSize(),
+        contentPadding = contentPadding,
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        item {
+            Panel(
+                kicker = stringResource(R.string.records_kicker),
+                title = stringResource(R.string.records_title),
+                trailing = {
+                    IconButton(onClick = onAdd) {
+                        Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.records_add))
+                    }
+                },
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    StatTile(
+                        label = stringResource(R.string.stats_today),
+                        value = Time.formatMinutes(todayMinutes, minuteUnit, hourUnit),
+                        modifier = Modifier.weight(1f),
+                    )
+                    StatTile(
+                        label = stringResource(R.string.stats_total),
+                        value = Time.formatMinutes(totalMinutes, minuteUnit, hourUnit),
+                        modifier = Modifier.weight(1f),
+                    )
                 }
-            },
-        ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                StatTile(
-                    label = stringResource(R.string.stats_today),
-                    value = Time.formatMinutes(todayMinutes, minuteUnit, hourUnit),
-                    modifier = Modifier.weight(1f),
+
+                Spacer(Modifier.height(12.dp))
+
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = onQueryChange,
+                    singleLine = true,
+                    leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+                    placeholder = { Text(stringResource(R.string.records_search)) },
+                    modifier = Modifier.fillMaxWidth(),
                 )
-                StatTile(
-                    label = stringResource(R.string.stats_total),
-                    value = Time.formatMinutes(totalMinutes, minuteUnit, hourUnit),
-                    modifier = Modifier.weight(1f),
+
+                Spacer(Modifier.height(10.dp))
+
+                SegmentedRow(
+                    options = FILTERS,
+                    selected = status,
+                    label = {
+                        stringResource(
+                            when (it) {
+                                null -> R.string.filter_all
+                                RecordStatus.COMPLETED -> R.string.filter_completed
+                                RecordStatus.ABANDONED -> R.string.filter_abandoned
+                            }
+                        )
+                    },
+                    onSelect = onStatusChange,
+                    modifier = Modifier.fillMaxWidth(),
                 )
             }
-
-            Spacer(Modifier.height(12.dp))
-
-            OutlinedTextField(
-                value = query,
-                onValueChange = onQueryChange,
-                singleLine = true,
-                leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
-                placeholder = { Text(stringResource(R.string.records_search)) },
-                modifier = Modifier.fillMaxWidth(),
-            )
-
-            Spacer(Modifier.height(10.dp))
-
-            SegmentedRow(
-                options = FILTERS,
-                selected = status,
-                label = {
-                    stringResource(
-                        when (it) {
-                            null -> R.string.filter_all
-                            RecordStatus.COMPLETED -> R.string.filter_completed
-                            RecordStatus.ABANDONED -> R.string.filter_abandoned
-                        }
-                    )
-                },
-                onSelect = onStatusChange,
-                modifier = Modifier.fillMaxWidth(),
-            )
         }
 
-        Spacer(Modifier.height(16.dp))
-
         if (records.isEmpty()) {
-            Panel {
-                Text(
-                    text = stringResource(R.string.records_empty),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 24.dp),
-                )
-            }
-        } else {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                records.forEach { record ->
-                    RecordCard(
-                        record = record,
-                        locale = locale,
-                        onEdit = { onEdit(record) },
-                        onDelete = { onDelete(record) },
+            item {
+                Panel {
+                    Text(
+                        text = stringResource(R.string.records_empty),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 24.dp),
                     )
                 }
+            }
+        } else {
+            items(records, key = { it.id }) { record ->
+                RecordCard(
+                    record = record,
+                    book = book,
+                    locale = locale,
+                    clock = clock,
+                    minuteUnit = minuteUnit,
+                    hourUnit = hourUnit,
+                    onEdit = { onEdit(record) },
+                    onDelete = { onDelete(record) },
+                )
             }
         }
     }
@@ -180,16 +199,22 @@ private fun StatTile(label: String, value: String, modifier: Modifier = Modifier
 @Composable
 private fun RecordCard(
     record: FocusRecord,
+    book: ProjectBook,
     locale: Locale,
+    clock: ClockFormat,
+    minuteUnit: String,
+    hourUnit: String,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
 ) {
     val isRest = record.isRest
-    Panel(contentPadding = androidx.compose.foundation.layout.PaddingValues(12.dp)) {
+    val project = book.projectFor(record)
+
+    Panel(contentPadding = PaddingValues(12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             TreeArt(
-                species = record.species,
-                palette = treePalette(record.title),
+                species = book.speciesFor(record),
+                palette = rememberTreePalette(project, muted = record.status == RecordStatus.ABANDONED),
                 modifier = Modifier.size(44.dp),
             )
             Spacer(Modifier.width(10.dp))
@@ -197,7 +222,9 @@ private fun RecordCard(
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = if (isRest) stringResource(R.string.rest_record_title) else record.title,
+                        text = if (isRest && record.title == Limits.REST_TITLE) {
+                            stringResource(R.string.rest_record_title)
+                        } else record.title,
                         style = MaterialTheme.typography.titleSmall,
                         color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
@@ -207,14 +234,22 @@ private fun RecordCard(
                     Spacer(Modifier.width(8.dp))
                     StatusBadge(record, isRest)
                 }
+                Spacer(Modifier.height(3.dp))
+                ProjectChip(project)
+                Spacer(Modifier.height(3.dp))
                 Text(
-                    text = Time.recordDateLabel(record.startedAt, locale),
+                    text = Time.recordDateLabel(record.startedAt, locale) +
+                        if (record.endedAt > record.startedAt) {
+                            " – " + clock.time(record.endedAt)
+                        } else "",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Text(
-                    text = stringResource(R.string.metric_focused, record.actualMinutes) +
-                        " · " + stringResource(R.string.metric_goal, record.durationMinutes),
+                    text = stringResource(
+                        R.string.metric_focused_text,
+                        Time.formatMinutes(record.actualMinutes, minuteUnit, hourUnit),
+                    ) + " · " + stringResource(R.string.metric_goal, record.durationMinutes),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

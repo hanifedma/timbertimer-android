@@ -7,11 +7,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.widthIn
@@ -19,6 +19,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Park
 import androidx.compose.material.icons.filled.Settings
@@ -26,6 +27,7 @@ import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -56,11 +58,12 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.timbertimer.MainActivity
 import com.example.timbertimer.R
-import com.example.timbertimer.data.local.LocaleStore
-import com.example.timbertimer.data.local.ThemeMode
 import com.example.timbertimer.data.model.FocusRecord
+import com.example.timbertimer.ui.screens.CalendarScreen
 import com.example.timbertimer.ui.screens.FocusScreen
 import com.example.timbertimer.ui.screens.ForestScreen
+import com.example.timbertimer.ui.screens.ProjectEditorDialog
+import com.example.timbertimer.ui.screens.ProjectsDialog
 import com.example.timbertimer.ui.screens.RecordEditorDialog
 import com.example.timbertimer.ui.screens.RecordsScreen
 import com.example.timbertimer.ui.screens.SettingsScreen
@@ -81,6 +84,7 @@ private enum class Destination(
     val icon: ImageVector,
 ) {
     FOCUS(R.string.nav_focus, Icons.Filled.Timer),
+    CALENDAR(R.string.nav_calendar, Icons.Filled.CalendarMonth),
     FOREST(R.string.nav_forest, Icons.Filled.Park),
     TASKS(R.string.nav_tasks, Icons.Filled.CheckCircle),
     RECORDS(R.string.nav_records, Icons.AutoMirrored.Filled.List),
@@ -94,6 +98,11 @@ private enum class Destination(
  * makes the same build feel native on a phone, a folded tablet and a landscape
  * screen without a second layout to maintain. Content is capped in width so a
  * 12-inch tablet does not stretch a form field across the whole panel.
+ *
+ * Settings is deliberately not one of the five tabs: a bottom bar stops reading
+ * as a row of destinations somewhere around the sixth. It lives in the top bar,
+ * and joins the bar only in the one window shape that has neither — narrow *and*
+ * short, which in practice means a small split-screen pane.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -112,16 +121,20 @@ fun TimberApp(
     var destination by rememberSaveable { mutableStateOf(Destination.FOCUS) }
     var pendingDelete by remember { mutableStateOf<FocusRecord?>(null) }
     var confirmDeleteAll by remember { mutableStateOf(false) }
+    var managingProjects by rememberSaveable { mutableStateOf(false) }
 
     val form by viewModel.form.collectAsStateWithLifecycle()
     val timer by viewModel.timer.collectAsStateWithLifecycle()
     val rest by viewModel.rest.collectAsStateWithLifecycle()
     val now by viewModel.now.collectAsStateWithLifecycle()
     val records by viewModel.records.collectAsStateWithLifecycle()
+    val projects by viewModel.projects.collectAsStateWithLifecycle()
     val notes by viewModel.notes.collectAsStateWithLifecycle()
     val grove by viewModel.grove.collectAsStateWithLifecycle()
+    val calendar by viewModel.calendar.collectAsStateWithLifecycle()
     val filter by viewModel.filter.collectAsStateWithLifecycle()
     val editor by viewModel.editor.collectAsStateWithLifecycle()
+    val projectEditor by viewModel.projectEditor.collectAsStateWithLifecycle()
     val session by viewModel.session.collectAsStateWithLifecycle()
     val dataMode by viewModel.dataMode.collectAsStateWithLifecycle()
 
@@ -168,11 +181,26 @@ fun TimberApp(
     // repeats the selected tab is not worth 64 of them.
     val showTopBar = heightDp >= COMPACT_HEIGHT_DP
 
+    val barDestinations = remember(useRail, showTopBar) {
+        // Settings has a home in the top bar or the rail; it only needs a tab
+        // when there is neither.
+        if (useRail || showTopBar) Destination.entries - Destination.SETTINGS
+        else Destination.entries.toList()
+    }
+
     Scaffold(
         topBar = {
             if (showTopBar) {
                 TopAppBar(
                     title = { Text(stringResource(destination.label)) },
+                    actions = {
+                        IconButton(onClick = { destination = Destination.SETTINGS }) {
+                            Icon(
+                                Icons.Filled.Settings,
+                                contentDescription = stringResource(R.string.nav_settings),
+                            )
+                        }
+                    },
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = MaterialTheme.colorScheme.background,
                     ),
@@ -182,7 +210,7 @@ fun TimberApp(
         bottomBar = {
             if (!useRail) {
                 NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
-                    Destination.entries.forEach { item ->
+                    barDestinations.forEach { item ->
                         NavigationBarItem(
                             selected = destination == item,
                             onClick = { destination = item },
@@ -207,7 +235,7 @@ fun TimberApp(
         ) {
             if (useRail) {
                 NavigationRail(containerColor = MaterialTheme.colorScheme.surface) {
-                    Spacer16()
+                    Spacer(Modifier.height(8.dp))
                     Destination.entries.forEach { item ->
                         NavigationRailItem(
                             selected = destination == item,
@@ -223,53 +251,83 @@ fun TimberApp(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.TopCenter,
             ) {
-                Column(
+                // A calendar earns every pixel of a tablet's width; a form does
+                // not, so the two are capped differently.
+                val maxContentWidth = if (destination == Destination.CALENDAR) 1200.dp else 900.dp
+                val listPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+
+                Box(
                     modifier = Modifier
-                        .widthIn(max = 900.dp)
-                        .fillMaxWidth()
-                        .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                        .widthIn(max = maxContentWidth)
+                        .fillMaxSize(),
                 ) {
                     when (destination) {
-                        Destination.FOCUS -> FocusScreen(
-                            form = form,
+                        Destination.FOCUS -> ScrollingScreen {
+                            FocusScreen(
+                                form = form,
+                                book = projects,
+                                timer = timer,
+                                rest = rest,
+                                now = now,
+                                suggestions = viewModel.titleSuggestions(),
+                                dataMode = dataMode,
+                                wide = wideContent,
+                                onTitleChange = viewModel::setTitle,
+                                onDurationChange = viewModel::setDuration,
+                                onModeChange = viewModel::setMode,
+                                onProjectChange = viewModel::setProject,
+                                onManageProjects = { managingProjects = true },
+                                onSpeciesChange = viewModel::setProjectTree,
+                                onStart = viewModel::start,
+                                onFinish = viewModel::finish,
+                                onStartRest = viewModel::startRest,
+                                onFinishRest = viewModel::finishRest,
+                            )
+                        }
+
+                        Destination.CALENDAR -> CalendarScreen(
+                            state = calendar,
+                            records = records,
                             timer = timer,
-                            rest = rest,
                             now = now,
-                            suggestions = viewModel.titleSuggestions(),
-                            dataMode = dataMode,
-                            wide = wideContent,
-                            onTitleChange = viewModel::setTitle,
-                            onDurationChange = viewModel::setDuration,
-                            onModeChange = viewModel::setMode,
-                            onSpeciesChange = viewModel::setSpecies,
-                            onStart = viewModel::start,
-                            onFinish = viewModel::finish,
-                            onStartRest = viewModel::startRest,
-                            onFinishRest = viewModel::finishRest,
+                            book = projects,
+                            onShift = viewModel::shiftCalendar,
+                            onToday = viewModel::calendarToToday,
+                            onDaysChange = viewModel::setCalendarDays,
+                            onZoom = viewModel::zoomCalendar,
+                            onOpenRecord = { viewModel.openEditor(it) },
+                            onCreateRecord = { startedAt, minutes ->
+                                viewModel.openEditor(null, startedAt = startedAt, minutes = minutes)
+                            },
+                            onMoveRecord = viewModel::moveRecord,
+                            onOpenTimer = { destination = Destination.FOCUS },
                         )
 
                         Destination.FOREST -> ForestScreen(
                             records = records,
+                            book = projects,
                             view = grove.view,
                             anchor = grove.anchor,
                             onViewChange = viewModel::setGroveView,
                             onShift = viewModel::shiftGrove,
                             onCurrent = viewModel::resetGroveToCurrent,
+                            contentPadding = listPadding,
                         )
 
-                        Destination.TASKS -> TasksScreen(
-                            notes = notes,
-                            onAdd = viewModel::addNote,
-                            onToggle = viewModel::toggleNote,
-                            onDelete = viewModel::deleteNote,
-                            onReorder = viewModel::reorderNotes,
-                        )
+                        Destination.TASKS -> ScrollingScreen {
+                            TasksScreen(
+                                notes = notes,
+                                onAdd = viewModel::addNote,
+                                onToggle = viewModel::toggleNote,
+                                onDelete = viewModel::deleteNote,
+                                onReorder = viewModel::reorderNotes,
+                            )
+                        }
 
                         Destination.RECORDS -> RecordsScreen(
                             records = viewModel.visibleRecords(),
                             allRecords = records,
+                            book = projects,
                             query = filter.query,
                             status = filter.status,
                             onQueryChange = viewModel::setQuery,
@@ -277,40 +335,42 @@ fun TimberApp(
                             onAdd = { viewModel.openEditor(null) },
                             onEdit = { viewModel.openEditor(it) },
                             onDelete = { pendingDelete = it },
+                            contentPadding = listPadding,
                         )
 
-                        Destination.SETTINGS -> SettingsScreen(
-                            session = session,
-                            dataMode = dataMode,
-                            themeMode = themeMode,
-                            language = language,
-                            soundEnabled = soundEnabled,
-                            volume = volume,
-                            vibrate = vibrate,
-                            idleReminder = idleReminder,
-                            backgroundSync = backgroundSync,
-                            onThemeChange = viewModel.settings::setThemeMode,
-                            onLanguageChange = onLanguageChange,
-                            onSoundToggle = viewModel::toggleSound,
-                            onVolumeChange = viewModel.settings::setSoundVolume,
-                            onVolumeSettled = viewModel::previewSound,
-                            onVibrateChange = viewModel.settings::setVibrate,
-                            onIdleReminderChange = viewModel::setIdleReminder,
-                            onBackgroundSyncChange = viewModel::setBackgroundSync,
-                            onIgnoreBatteryOptimisation = onIgnoreBatteryOptimisation,
-                            onAddWidget = onAddWidget,
-                            onSignIn = {
-                                scope.launch {
-                                    val url = viewModel.authorizeUrl()
-                                    if (url != null) onOpenAuthUrl(url)
-                                }
-                            },
-                            onSignOut = viewModel::signOut,
-                            onDeleteAll = { confirmDeleteAll = true },
-                        )
+                        Destination.SETTINGS -> ScrollingScreen {
+                            SettingsScreen(
+                                session = session,
+                                dataMode = dataMode,
+                                themeMode = themeMode,
+                                language = language,
+                                soundEnabled = soundEnabled,
+                                volume = volume,
+                                vibrate = vibrate,
+                                idleReminder = idleReminder,
+                                backgroundSync = backgroundSync,
+                                onThemeChange = viewModel.settings::setThemeMode,
+                                onLanguageChange = onLanguageChange,
+                                onSoundToggle = viewModel::toggleSound,
+                                onVolumeChange = viewModel.settings::setSoundVolume,
+                                onVolumeSettled = viewModel::previewSound,
+                                onVibrateChange = viewModel.settings::setVibrate,
+                                onIdleReminderChange = viewModel::setIdleReminder,
+                                onBackgroundSyncChange = viewModel::setBackgroundSync,
+                                onIgnoreBatteryOptimisation = onIgnoreBatteryOptimisation,
+                                onAddWidget = onAddWidget,
+                                onManageProjects = { managingProjects = true },
+                                onSignIn = {
+                                    scope.launch {
+                                        val url = viewModel.authorizeUrl()
+                                        if (url != null) onOpenAuthUrl(url)
+                                    }
+                                },
+                                onSignOut = viewModel::signOut,
+                                onDeleteAll = { confirmDeleteAll = true },
+                            )
+                        }
                     }
-
-                    Spacer16()
                 }
             }
         }
@@ -319,10 +379,44 @@ fun TimberApp(
     editor?.let { current ->
         RecordEditorDialog(
             editor = current,
+            book = projects,
             isValid = viewModel.editorIsValid(current),
             onChange = viewModel::updateEditor,
             onSave = viewModel::saveEditor,
+            onDelete = current.id?.let { id ->
+                {
+                    val record = records.firstOrNull { it.id == id }
+                    viewModel.closeEditor()
+                    if (record != null) pendingDelete = record
+                }
+            },
             onDismiss = viewModel::closeEditor,
+        )
+    }
+
+    if (managingProjects) {
+        ProjectsDialog(
+            book = projects,
+            recordCount = viewModel::recordCountFor,
+            onEdit = { project ->
+                viewModel.openProjectEditor(project)
+            },
+            onDismiss = { managingProjects = false },
+        )
+    }
+
+    projectEditor?.let { current ->
+        ProjectEditorDialog(
+            editor = current,
+            nameTaken = viewModel.projectNameIsTaken(current),
+            isValid = viewModel.projectEditorIsValid(current),
+            onNameChange = viewModel::setProjectEditorName,
+            onColorChange = viewModel::setProjectEditorColor,
+            onTreeChange = viewModel::setProjectEditorTree,
+            onSave = viewModel::saveProjectEditor,
+            onDelete = { current.id?.let(viewModel::deleteProject) },
+            onDismiss = viewModel::closeProjectEditor,
+            recordCount = current.id?.let(viewModel::recordCountFor) ?: 0,
         )
     }
 
@@ -372,7 +466,23 @@ fun TimberApp(
     }
 }
 
+/**
+ * The wrapper for screens that are one long column rather than a list.
+ *
+ * The scroll lives here, in each screen, rather than around all of them: the
+ * calendar and the forest bring their own, and nesting one scroller inside
+ * another is what makes a list feel like it is fighting the finger.
+ */
 @Composable
-private fun Spacer16() {
-    Spacer(Modifier.height(8.dp))
+private fun ScrollingScreen(content: @Composable () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        content()
+        Spacer(Modifier.height(8.dp))
+    }
 }

@@ -1,7 +1,5 @@
 package com.example.timbertimer.ui.screens
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,22 +8,23 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -38,29 +37,33 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.example.timbertimer.R
-import com.example.timbertimer.core.Seed
 import com.example.timbertimer.core.Time
 import com.example.timbertimer.data.model.ActiveTimer
 import com.example.timbertimer.data.model.DataMode
+import com.example.timbertimer.data.model.ProjectBook
+import com.example.timbertimer.data.model.Projects
 import com.example.timbertimer.data.model.RestTimer
 import com.example.timbertimer.data.model.TimerMode
 import com.example.timbertimer.data.model.TreeSpecies
 import com.example.timbertimer.ui.FocusForm
 import com.example.timbertimer.ui.components.Panel
+import com.example.timbertimer.ui.components.ProjectChip
+import com.example.timbertimer.ui.components.ProjectPicker
 import com.example.timbertimer.ui.components.SegmentedRow
+import com.example.timbertimer.ui.components.SpeciesRow
 import com.example.timbertimer.ui.components.TimerDial
 import com.example.timbertimer.ui.components.TreeArt
-import com.example.timbertimer.ui.components.treePalette
+import com.example.timbertimer.ui.components.projectColors
+import com.example.timbertimer.ui.components.projectLabel
+import com.example.timbertimer.ui.components.rememberTreePalette
 
 private val DURATION_PRESETS = listOf(15, 25, 45, 60)
 
@@ -74,6 +77,7 @@ private val DURATION_PRESETS = listOf(15, 25, 45, 60)
 @Composable
 fun FocusScreen(
     form: FocusForm,
+    book: ProjectBook,
     timer: ActiveTimer?,
     rest: RestTimer?,
     now: Long,
@@ -83,6 +87,8 @@ fun FocusScreen(
     onTitleChange: (String) -> Unit,
     onDurationChange: (Int) -> Unit,
     onModeChange: (TimerMode) -> Unit,
+    onProjectChange: (String) -> Unit,
+    onManageProjects: () -> Unit,
     onSpeciesChange: (TreeSpecies) -> Unit,
     onStart: () -> Unit,
     onFinish: () -> Unit,
@@ -96,17 +102,18 @@ fun FocusScreen(
             horizontalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                DialPanel(form, timer, now, dataMode, onStart, onFinish)
+                DialPanel(form, book, timer, now, dataMode, onStart, onFinish)
             }
             Column(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 SetupPanel(
-                    form, timer, suggestions,
-                    onTitleChange, onDurationChange, onModeChange, onSpeciesChange,
+                    form, book, timer, suggestions,
+                    onTitleChange, onDurationChange, onModeChange,
+                    onProjectChange, onManageProjects, onSpeciesChange,
                 )
-                RestPanel(rest, now, onStartRest, onFinishRest)
+                RestPanel(book, rest, now, onStartRest, onFinishRest)
             }
         }
     } else {
@@ -114,12 +121,13 @@ fun FocusScreen(
             modifier = modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            DialPanel(form, timer, now, dataMode, onStart, onFinish)
+            DialPanel(form, book, timer, now, dataMode, onStart, onFinish)
             SetupPanel(
-                form, timer, suggestions,
-                onTitleChange, onDurationChange, onModeChange, onSpeciesChange,
+                form, book, timer, suggestions,
+                onTitleChange, onDurationChange, onModeChange,
+                onProjectChange, onManageProjects, onSpeciesChange,
             )
-            RestPanel(rest, now, onStartRest, onFinishRest)
+            RestPanel(book, rest, now, onStartRest, onFinishRest)
         }
     }
 }
@@ -127,6 +135,7 @@ fun FocusScreen(
 @Composable
 private fun DialPanel(
     form: FocusForm,
+    book: ProjectBook,
     timer: ActiveTimer?,
     now: Long,
     dataMode: DataMode,
@@ -135,6 +144,7 @@ private fun DialPanel(
 ) {
     val running = timer != null
     val stopwatch = (timer?.mode ?: form.mode) == TimerMode.STOPWATCH
+    val project = book[timer?.projectId ?: form.projectId]
 
     // Reading `now` here is what makes the whole dial repaint each second.
     val seconds = when {
@@ -157,34 +167,51 @@ private fun DialPanel(
             if (dataMode == DataMode.CLOUD) R.string.brand_cloud_garden
             else R.string.brand_local_garden
         ),
-        title = form.title.ifBlank { " " },
+        title = form.title.ifBlank { projectLabel(project) },
     ) {
-        TimerDial(
-            species = form.species,
-            palette = treePalette(form.title),
-            progress = progress,
-            showRing = !stopwatch,
-            growth = growth,
-            clockText = Time.formatClock(seconds),
-            stateLabel = stringResource(
-                if (running) R.string.timer_growing else R.string.timer_ready
-            ),
-            progressLabel = when {
-                !running -> null
-                // A stopwatch has no percentage to show, so it reports the
-                // minutes it has run instead — the same swap the website makes.
-                stopwatch -> "${timer!!.elapsedSeconds(now) / 60}m"
-                else -> "${(progress * 100).toInt()}%"
-            },
+        Spacer(Modifier.height(2.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            ProjectChip(project)
+        }
+
+        // The dial is square, and the square is capped by the *window*, not by a
+        // fixed number: on a phone in landscape there are barely 400dp of height
+        // to share with the clock and the buttons. Capping both sides and
+        // centring is what keeps it square without spilling over either — a
+        // height cap alone would be quietly ignored, because an aspect ratio
+        // satisfies its width first and reports whatever height that implies.
+        val dialSize = dialMaxSize()
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                // Sized to the window, not to a fixed number: on a phone in
-                // landscape there are barely 400dp of height to share with the
-                // clock and the buttons, and a dial that claims all of it pushes
-                // them off the screen.
-                .heightIn(max = dialMaxHeight())
                 .padding(top = 8.dp),
-        )
+            contentAlignment = Alignment.Center,
+        ) {
+            TimerDial(
+                species = project.species,
+                palette = rememberTreePalette(project),
+                // The ring picks up the project's colour, so a running session
+                // reads as that project at a glance.
+                ringColor = projectColors(project).base,
+                progress = progress,
+                showRing = !stopwatch,
+                growth = growth,
+                clockText = Time.formatClock(seconds),
+                stateLabel = stringResource(
+                    if (running) R.string.timer_growing else R.string.timer_ready
+                ),
+                progressLabel = when {
+                    !running -> null
+                    // A stopwatch has no percentage to show, so it reports the
+                    // minutes it has run instead — the same swap the website makes.
+                    stopwatch -> "${timer!!.elapsedSeconds(now) / 60}m"
+                    else -> "${(progress * 100).toInt()}%"
+                },
+                modifier = Modifier
+                    .sizeIn(maxWidth = dialSize, maxHeight = dialSize)
+                    .fillMaxWidth(),
+            )
+        }
 
         Spacer(Modifier.height(16.dp))
 
@@ -211,24 +238,36 @@ private fun DialPanel(
     }
 }
 
-/** At most half the window's height, and never so small the tree is a smudge. */
+/**
+ * How big the dial may be: at most half the window's height and, on a wide
+ * screen where the panel is only half the width, never so large that the square
+ * pushes its own controls off the panel. Never so small the tree is a smudge.
+ */
 @Composable
-private fun dialMaxHeight(): Dp =
-    (LocalConfiguration.current.screenHeightDp * 0.5f).dp.coerceIn(180.dp, 420.dp)
+private fun dialMaxSize(): Dp {
+    val configuration = LocalConfiguration.current
+    val byHeight = configuration.screenHeightDp * 0.5f
+    val byWidth = configuration.screenWidthDp * 0.6f
+    return minOf(byHeight, byWidth).dp.coerceIn(160.dp, 420.dp)
+}
 
 @Composable
 private fun SetupPanel(
     form: FocusForm,
+    book: ProjectBook,
     timer: ActiveTimer?,
     suggestions: List<String>,
     onTitleChange: (String) -> Unit,
     onDurationChange: (Int) -> Unit,
     onModeChange: (TimerMode) -> Unit,
+    onProjectChange: (String) -> Unit,
+    onManageProjects: () -> Unit,
     onSpeciesChange: (TreeSpecies) -> Unit,
 ) {
     // Everything on this panel describes the session about to start, so a
     // running timer locks all of it — its identity is already fixed.
     val editable = timer == null
+    val project = book[form.projectId]
 
     Panel(kicker = stringResource(R.string.field_session)) {
         SegmentedRow(
@@ -246,12 +285,33 @@ private fun SetupPanel(
 
         Spacer(Modifier.height(14.dp))
 
+        // Managing projects stays available while a session runs; only choosing
+        // a different one for *this* session does not.
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            ProjectPicker(
+                book = book,
+                selectedId = form.projectId,
+                onSelect = onProjectChange,
+                enabled = editable,
+                modifier = Modifier.weight(1f),
+            )
+            Spacer(Modifier.width(4.dp))
+            IconButton(onClick = onManageProjects) {
+                Icon(
+                    Icons.Filled.Tune,
+                    contentDescription = stringResource(R.string.project_manage),
+                )
+            }
+        }
+
+        Spacer(Modifier.height(10.dp))
+
         OutlinedTextField(
             value = form.title,
             onValueChange = onTitleChange,
             enabled = editable,
             singleLine = true,
-            label = { Text(stringResource(R.string.field_session)) },
+            label = { Text(stringResource(R.string.field_task)) },
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
             modifier = Modifier.fillMaxWidth(),
         )
@@ -311,16 +371,22 @@ private fun SetupPanel(
 
         Spacer(Modifier.height(14.dp))
         Text(
-            text = stringResource(R.string.field_tree),
+            text = stringResource(R.string.field_tree_project),
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(Modifier.height(6.dp))
-        SpeciesPicker(
-            selected = form.species,
-            title = form.title,
-            enabled = editable,
+        // The tree belongs to the project, so choosing one here re-plants every
+        // record that project ever grew — including the ones already in the
+        // forest. That is the point: a project looks like one thing.
+        SpeciesRow(
+            selected = project.tree,
+            color = project.color,
             onSelect = onSpeciesChange,
+            enabled = !project.missing,
+            // Only where it is already the answer — otherwise the row would show
+            // nothing selected for a project that grows one.
+            includeWilted = project.tree == TreeSpecies.WILTED.id,
         )
     }
 }
@@ -367,61 +433,9 @@ private fun DurationField(
     )
 }
 
-/** Species are chosen by looking at them, not by reading a dropdown of names. */
-@Composable
-private fun SpeciesPicker(
-    selected: TreeSpecies,
-    title: String,
-    enabled: Boolean,
-    onSelect: (TreeSpecies) -> Unit,
-) {
-    val palette = treePalette(title)
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        items(TreeSpecies.choosable, key = { it.id }) { species ->
-            val isSelected = species == selected
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier
-                    .width(76.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(
-                        if (isSelected) MaterialTheme.colorScheme.primaryContainer
-                        else MaterialTheme.colorScheme.surfaceContainerHigh
-                    )
-                    .border(
-                        width = 1.dp,
-                        color = if (isSelected) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.outline,
-                        shape = RoundedCornerShape(12.dp),
-                    )
-                    .selectable(
-                        selected = isSelected,
-                        enabled = enabled,
-                        role = Role.RadioButton,
-                        onClick = { onSelect(species) },
-                    )
-                    .padding(vertical = 8.dp, horizontal = 4.dp),
-            ) {
-                TreeArt(
-                    species = species,
-                    palette = palette,
-                    modifier = Modifier.size(44.dp),
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = stringResource(species.displayRes),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-    }
-}
-
 @Composable
 private fun RestPanel(
+    book: ProjectBook,
     rest: RestTimer?,
     now: Long,
     onStartRest: () -> Unit,
@@ -429,17 +443,18 @@ private fun RestPanel(
 ) {
     val resting = rest != null
     val elapsed = rest?.elapsedSeconds(now) ?: 0L
+    val restProject = book[Projects.REST_ID]
 
     Panel(
         kicker = stringResource(R.string.rest_elapsed),
         title = stringResource(if (resting) R.string.rest_resting else R.string.rest_title),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            // A rest grows the wilted tree it will plant, so its cost is visible
-            // while it is being spent rather than only afterwards.
+            // A rest grows the tree it will plant, so its cost is visible while
+            // it is being spent rather than only afterwards.
             TreeArt(
-                species = TreeSpecies.WILTED,
-                palette = treePalette("rest"),
+                species = restProject.species,
+                palette = rememberTreePalette(restProject),
                 modifier = Modifier.size(56.dp),
             )
             Spacer(Modifier.width(12.dp))

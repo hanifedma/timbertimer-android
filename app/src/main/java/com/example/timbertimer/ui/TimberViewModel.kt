@@ -6,7 +6,6 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.example.timbertimer.R
-import com.example.timbertimer.core.Seed
 import com.example.timbertimer.core.Time
 import com.example.timbertimer.core.UiMessage
 import com.example.timbertimer.data.RecordMapper
@@ -14,6 +13,8 @@ import com.example.timbertimer.data.TimberRepository
 import com.example.timbertimer.data.local.SettingsStore
 import com.example.timbertimer.data.model.FocusRecord
 import com.example.timbertimer.data.model.Limits
+import com.example.timbertimer.data.model.Project
+import com.example.timbertimer.data.model.Projects
 import com.example.timbertimer.data.model.RecordStatus
 import com.example.timbertimer.data.model.TimerMode
 import com.example.timbertimer.data.model.TreeSpecies
@@ -26,8 +27,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import java.util.UUID
+import kotlin.math.roundToLong
 
 /** Which forest window the user is looking at. */
 enum class GroveView { TODAY, WEEK, MONTH }
@@ -37,13 +40,13 @@ data class FocusForm(
     val title: String = "",
     val durationMinutes: Int = Limits.DEFAULT_DURATION,
     val mode: TimerMode = TimerMode.COUNTDOWN,
-    val species: TreeSpecies = TreeSpecies.PINE,
+    val projectId: String = Projects.DEFAULT_ID,
 )
 
 data class GroveState(
-    val view: GroveView = GroveView.WEEK,
-    /** Start of the week or month being shown. */
-    val anchor: Long = Time.startOfWeek(System.currentTimeMillis()),
+    val view: GroveView = GroveView.TODAY,
+    /** Start of the day, week or month being shown. */
+    val anchor: Long = Time.startOfDay(System.currentTimeMillis()),
 )
 
 data class RecordFilter(
@@ -51,15 +54,55 @@ data class RecordFilter(
     val status: RecordStatus? = null,
 )
 
-/** The add/edit sheet's fields, as text so a half-typed value is not destroyed. */
+/**
+ * The add/edit sheet's fields.
+ *
+ * Times are held as instants rather than text: they are set with the platform's
+ * own date and time pickers, and the calendar seeds them from wherever it was
+ * tapped, so there is never a half-typed value to preserve. Only the goal is
+ * free text, because a box bound to an Int cannot be emptied while retyping.
+ */
 data class RecordEditor(
     val id: String?,
     val title: String,
-    val startedAt: String,
+    val projectId: String,
+    val startedAt: Long,
+    val endedAt: Long,
     val status: RecordStatus,
-    val durationMinutes: String,
-    val actualMinutes: String,
-    val species: TreeSpecies,
+    val goalMinutes: String,
+) {
+    val minutes: Int
+        get() = ((endedAt - startedAt) / 60_000L).coerceIn(0L, Limits.MINUTES_MAX.toLong()).toInt()
+
+    val endsBeforeStart: Boolean get() = endedAt < startedAt
+
+    val tooLong: Boolean get() = (endedAt - startedAt) > Limits.MINUTES_MAX * 60_000L
+}
+
+/**
+ * The project sheet.
+ *
+ * [autoColor] and [autoTree] track whether the look is still following the name.
+ * A project being created re-rolls both as it is typed, so naming it is enough;
+ * touching either picker pins that choice and stops the re-rolling.
+ */
+data class ProjectEditor(
+    val id: String?,
+    val name: String,
+    val color: String,
+    val tree: String,
+    val autoColor: Boolean,
+    val autoTree: Boolean,
+) {
+    val isNew: Boolean get() = id == null
+    val isBuiltIn: Boolean get() = id in Projects.BUILTIN_IDS
+}
+
+/** What the calendar is showing: how many days, how tall an hour, starting when. */
+data class CalendarState(
+    val days: Int = SettingsStore.CALENDAR_DEFAULT_DAYS,
+    val zoomDp: Float = SettingsStore.CALENDAR_DEFAULT_ZOOM,
+    val anchor: Long = 0L,
 )
 
 class TimberViewModel(
@@ -71,6 +114,7 @@ class TimberViewModel(
 ) : ViewModel() {
 
     val records = repository.records
+    val projects = repository.projects
     val notes = repository.notes
     val dataMode = repository.dataMode
     val session = repository.session
@@ -88,12 +132,24 @@ class TimberViewModel(
     private val _filter = MutableStateFlow(RecordFilter())
     val filter: StateFlow<RecordFilter> = _filter.asStateFlow()
 
+    private val _calendar = MutableStateFlow(
+        CalendarState(
+            days = settings.calendarDays.value,
+            zoomDp = settings.calendarZoom.value,
+            anchor = defaultCalendarAnchor(settings.calendarDays.value),
+        )
+    )
+    val calendar: StateFlow<CalendarState> = _calendar.asStateFlow()
+
     /** A screen the app was opened *at*, e.g. by the widget. Consumed once. */
     private val _requestedDestination = MutableStateFlow<String?>(null)
     val requestedDestination: StateFlow<String?> = _requestedDestination.asStateFlow()
 
     private val _editor = MutableStateFlow<RecordEditor?>(null)
     val editor: StateFlow<RecordEditor?> = _editor.asStateFlow()
+
+    private val _projectEditor = MutableStateFlow<ProjectEditor?>(null)
+    val projectEditor: StateFlow<ProjectEditor?> = _projectEditor.asStateFlow()
 
     private val _messages = MutableSharedFlow<UiMessage>(extraBufferCapacity = 8)
     val messages: SharedFlow<UiMessage> = _messages
@@ -106,39 +162,60 @@ class TimberViewModel(
             title = settings.sessionName.value.ifBlank { Limits.DEFAULT_TITLE },
             durationMinutes = settings.duration.value,
             mode = settings.timerMode.value,
-            species = repository.resolveSpeciesFor(settings.sessionName.value),
+            projectId = settings.selectedProjectId.value.ifBlank { Projects.DEFAULT_ID },
         )
 
         viewModelScope.launch { repository.messages.collect { _messages.emit(it) } }
         viewModelScope.launch { engine.messages.collect { _messages.emit(it) } }
 
-        // The name and its tree both depend on history, which arrives later.
+        // The name and its project both depend on history and on the project
+        // list, and both arrive later. Seeding before the projects are in would
+        // find nothing to match and fall back to the default — overwriting the
+        // very choice it is supposed to restore — so it waits for both.
         viewModelScope.launch {
-            repository.records.collect { records ->
-                if (formSeeded) return@collect
+            combine(repository.records, repository.projects, ::Pair).collect { (records, book) ->
+                if (formSeeded || book.isEmpty || engine.timer.value != null) return@collect
                 formSeeded = true
+                val latestFocus = records.firstOrNull { !it.isRest }
                 val title = when {
                     settings.hasSessionName() -> settings.sessionName.value
-                    else -> records.firstOrNull { !it.isRest }?.title ?: Limits.DEFAULT_TITLE
+                    else -> latestFocus?.title ?: Limits.DEFAULT_TITLE
                 }
-                _form.value = _form.value.copy(
-                    title = title,
-                    species = repository.resolveSpeciesFor(title),
-                )
+                // What was last chosen wins; then the task name's own project;
+                // then wherever the last session was filed.
+                val paired = settings.selectedProjectId.value.takeIf { book.contains(it) }
+                    ?: repository.projectForTitle(title)
+                    ?: latestFocus?.projectId?.takeIf { book.contains(it) }
+                    ?: Projects.DEFAULT_ID
+                _form.value = _form.value.copy(title = title, projectId = paired)
+                if (settings.selectedProjectId.value != paired) settings.setSelectedProjectId(paired)
             }
         }
 
-        // A timer adopted from another device names the session and fixes its tree.
+        // A timer adopted from another device names the session, and brings its
+        // project (and therefore its tree) with it.
         viewModelScope.launch {
             engine.timer.collect { running ->
                 if (running == null) return@collect
-                val species = TreeSpecies.byId(running.speciesId)
-                    ?: repository.resolveSpeciesFor(running.title)
+                formSeeded = true
                 _form.value = _form.value.copy(
                     title = running.title,
                     mode = running.mode,
-                    species = species,
+                    projectId = running.projectId,
                 )
+                if (settings.selectedProjectId.value != running.projectId) {
+                    settings.setSelectedProjectId(running.projectId)
+                }
+            }
+        }
+
+        // A project deleted on another device must not stay selected here.
+        viewModelScope.launch {
+            repository.projects.collect { book ->
+                if (book.isEmpty) return@collect
+                if (!book.contains(_form.value.projectId)) {
+                    setProject(Projects.DEFAULT_ID)
+                }
             }
         }
     }
@@ -169,15 +246,16 @@ class TimberViewModel(
 
     fun setTitle(title: String) {
         val trimmed = title.take(Limits.TITLE_MAX)
-        // A running timer owns its name and its tree; typing does not move them.
-        val species = if (timer.value != null) _form.value.species
-        else repository.resolveSpeciesFor(trimmed)
-        _form.value = _form.value.copy(title = trimmed, species = species)
+        _form.value = _form.value.copy(title = trimmed)
         settings.setSessionName(trimmed)
+        // A running timer owns its project; typing does not move it.
+        if (timer.value != null) return
+        // Follow the task name that was just typed or picked, if it has a home.
+        repository.projectForTitle(trimmed)?.let { setProject(it) }
     }
 
     fun setDuration(minutes: Int) {
-        val safe = minutes.coerceIn(1, Limits.MINUTES_MAX)
+        val safe = minutes.coerceIn(1, Limits.TIMER_MINUTES_MAX)
         _form.value = _form.value.copy(durationMinutes = safe)
         settings.setDuration(safe)
     }
@@ -188,11 +266,20 @@ class TimberViewModel(
         settings.setTimerMode(mode)
     }
 
-    fun setSpecies(species: TreeSpecies) {
+    fun setProject(id: String) {
         if (timer.value != null) return
-        _form.value = _form.value.copy(species = species)
-        // Remembering the pick per name is what makes "eating ayam" keep its palm.
-        settings.saveTreePreference(_form.value.title.ifBlank { Limits.DEFAULT_TITLE }, species.id)
+        _form.value = _form.value.copy(projectId = id)
+        settings.setSelectedProjectId(id)
+    }
+
+    /**
+     * The tree belongs to the project now, so choosing one here re-plants every
+     * record that project ever grew.
+     */
+    fun setProjectTree(species: TreeSpecies) {
+        val project = projects.value[_form.value.projectId]
+        if (project.missing || project.tree == species.id) return
+        viewModelScope.launch { repository.saveProject(project.copy(tree = species.id)) }
     }
 
     /** Names already used, newest first, offered as suggestions. */
@@ -216,7 +303,7 @@ class TimberViewModel(
                 title = form.title,
                 mode = form.mode,
                 minutes = form.durationMinutes,
-                speciesId = form.species.id,
+                projectId = form.projectId,
             )
         }
     }
@@ -250,7 +337,7 @@ class TimberViewModel(
     fun shiftGrove(direction: Int) {
         val state = _grove.value
         _grove.value = when (state.view) {
-            GroveView.TODAY -> state
+            GroveView.TODAY -> state.copy(anchor = Time.addDays(state.anchor, direction.toLong()))
             GroveView.WEEK -> state.copy(anchor = Time.addDays(state.anchor, direction * 7L))
             GroveView.MONTH -> state.copy(
                 anchor = Time.startOfMonth(Time.addMonths(state.anchor, direction.toLong()))
@@ -259,6 +346,72 @@ class TimberViewModel(
     }
 
     fun resetGroveToCurrent() = setGroveView(_grove.value.view)
+
+    // ---------- the calendar ----------
+
+    fun setCalendarDays(days: Int) {
+        val safe = days.coerceIn(1, SettingsStore.CALENDAR_MAX_DAYS)
+        if (safe == _calendar.value.days) return
+        settings.setCalendarDays(safe)
+        // Keep today on screen if it already was, rather than letting it drift
+        // away as the range grows or shrinks.
+        val showedToday = calendarShowsToday()
+        _calendar.value = _calendar.value.copy(
+            days = safe,
+            anchor = if (showedToday) defaultCalendarAnchor(safe) else _calendar.value.anchor,
+        )
+    }
+
+    fun zoomCalendar(factor: Float) {
+        val next = (_calendar.value.zoomDp * factor)
+            .coerceIn(SettingsStore.CALENDAR_MIN_ZOOM, SettingsStore.CALENDAR_MAX_ZOOM)
+        if (next == _calendar.value.zoomDp) return
+        settings.setCalendarZoom(next)
+        _calendar.value = _calendar.value.copy(zoomDp = next)
+    }
+
+    fun shiftCalendar(direction: Int) {
+        val state = _calendar.value
+        _calendar.value = state.copy(anchor = Time.addDays(state.anchor, direction.toLong() * state.days))
+    }
+
+    fun calendarToToday() {
+        _calendar.value = _calendar.value.copy(anchor = defaultCalendarAnchor(_calendar.value.days))
+    }
+
+    fun calendarShowsToday(): Boolean {
+        val state = _calendar.value
+        val today = Time.startOfDay(System.currentTimeMillis())
+        return today >= state.anchor && today < Time.addDays(state.anchor, state.days.toLong())
+    }
+
+    /** Today sits in the middle of the range, so yesterday and the rest of today
+     *  are both one glance away. */
+    private fun defaultCalendarAnchor(days: Int): Long =
+        Time.addDays(Time.startOfDay(System.currentTimeMillis()), -((days - 1) / 2).toLong())
+
+    /**
+     * Commits a block dragged to a new time or resized on the calendar.
+     *
+     * The start lands on a whole minute: a record made by the timer starts at
+     * some stray second, and carrying that through a drag makes the times read a
+     * minute out from the grid line it was dropped on.
+     */
+    fun moveRecord(record: FocusRecord, startedAt: Long, minutes: Int) {
+        val start = (startedAt / 60_000L) * 60_000L
+        val safeMinutes = minutes.coerceIn(1, Limits.MINUTES_MAX)
+        if (record.startedAt == start && record.actualMinutes == safeMinutes) return
+        viewModelScope.launch {
+            repository.updateRecord(
+                record.copy(
+                    startedAt = start,
+                    endedAt = start + safeMinutes * 60_000L,
+                    actualMinutes = safeMinutes,
+                )
+            )
+            _messages.emit(UiMessage.of(R.string.toast_record_saved))
+        }
+    }
 
     // ---------- records ----------
 
@@ -270,41 +423,55 @@ class TimberViewModel(
         _filter.value = _filter.value.copy(status = status)
     }
 
+    /** Searching covers the project name too, now that it is part of a record. */
     fun visibleRecords(): List<FocusRecord> {
         val (query, status) = _filter.value
         val needle = query.trim().lowercase()
+        val book = projects.value
         return records.value
             .asSequence()
             .filter { status == null || it.status == status }
-            .filter { needle.isEmpty() || it.title.lowercase().contains(needle) }
+            .filter {
+                needle.isEmpty() ||
+                    "${it.title} ${book[it.projectId].name}".lowercase().contains(needle)
+            }
             .sortedByDescending { it.startedAt }
             .toList()
     }
 
-    fun openEditor(record: FocusRecord?) {
-        val nowMillis = System.currentTimeMillis()
+    /**
+     * Opens the record sheet. [startedAt] and [minutes] seed a new record with
+     * the slot the calendar was dragged over.
+     */
+    fun openEditor(
+        record: FocusRecord?,
+        startedAt: Long? = null,
+        minutes: Int? = null,
+        projectId: String? = null,
+    ) {
         _editor.value = if (record == null) {
-            val title = _form.value.title.ifBlank { Limits.DEFAULT_TITLE }
+            val start = startedAt ?: roundToQuarter(System.currentTimeMillis())
+            val length = (minutes ?: _form.value.durationMinutes).coerceIn(1, Limits.MINUTES_MAX)
             RecordEditor(
                 id = null,
-                title = title,
-                startedAt = Time.editableTimestamp(nowMillis),
+                title = "",
+                projectId = projectId
+                    ?: _form.value.projectId.takeIf { projects.value.contains(it) }
+                    ?: Projects.DEFAULT_ID,
+                startedAt = start,
+                endedAt = start + length * 60_000L,
                 status = RecordStatus.COMPLETED,
-                durationMinutes = _form.value.durationMinutes.toString(),
-                actualMinutes = _form.value.durationMinutes.toString(),
-                species = repository.resolveSpeciesFor(title),
+                goalMinutes = length.toString(),
             )
         } else {
             RecordEditor(
                 id = record.id,
                 title = record.title,
-                startedAt = Time.editableTimestamp(record.startedAt),
+                projectId = record.projectId,
+                startedAt = record.startedAt,
+                endedAt = maxOf(record.endedAt, record.startedAt),
                 status = record.status,
-                durationMinutes = record.durationMinutes.toString(),
-                actualMinutes = record.actualMinutes.toString(),
-                species = TreeSpecies.byLabel(record.treeKind)
-                    ?.takeIf { it != TreeSpecies.WILTED }
-                    ?: repository.resolveSpeciesFor(record.title),
+                goalMinutes = record.durationMinutes.toString(),
             )
         }
     }
@@ -318,16 +485,20 @@ class TimberViewModel(
     }
 
     /** True when the sheet's values would produce a record the table accepts. */
-    fun editorIsValid(editor: RecordEditor): Boolean =
-        editor.title.isNotBlank() && Time.parseEditableTimestamp(editor.startedAt) != null
+    fun editorIsValid(editor: RecordEditor): Boolean = !editor.endsBeforeStart && !editor.tooLong
 
     fun saveEditor() {
         val editor = _editor.value ?: return
-        val startedAt = Time.parseEditableTimestamp(editor.startedAt) ?: return
-        val title = RecordMapper.cleanTitle(editor.title)
-        val actual = RecordMapper.cleanMinutes(editor.actualMinutes.toIntOrNull(), 0, 0)
-        val duration = RecordMapper.cleanMinutes(
-            editor.durationMinutes.toIntOrNull(),
+        if (!editorIsValid(editor)) return
+
+        val book = projects.value
+        val project = book[editor.projectId]
+        // An empty task name falls back to the project's, so a block dragged out
+        // on the calendar is nameable with one tap and no typing.
+        val title = RecordMapper.cleanTitle(editor.title.ifBlank { project.name })
+        val actual = editor.minutes
+        val goal = RecordMapper.cleanMinutes(
+            editor.goalMinutes.toIntOrNull(),
             if (actual > 0) actual else 1,
             1,
         )
@@ -335,23 +506,18 @@ class TimberViewModel(
         val record = FocusRecord(
             id = editor.id ?: UUID.randomUUID().toString(),
             title = title,
-            durationMinutes = duration,
+            projectId = editor.projectId,
+            durationMinutes = goal,
             actualMinutes = actual,
             status = editor.status,
-            startedAt = startedAt,
-            endedAt = startedAt + actual * 60_000L,
-            treeKind = RecordMapper.pickTreeKind(title, editor.status, editor.species.id) {
-                settings.treePreference(it)
-            },
+            startedAt = editor.startedAt,
+            // Stored as exactly the minutes we keep, so the calendar block and
+            // the "focused" figure can never disagree.
+            endedAt = editor.startedAt + actual * 60_000L,
+            treeKind = RecordMapper.pickTreeKind(project, editor.status),
             createdAt = System.currentTimeMillis(),
             updatedAt = System.currentTimeMillis(),
         )
-
-        // Remembering the species here too, so the timer's picker agrees with
-        // what the user just said this session's tree should be.
-        if (editor.status == RecordStatus.COMPLETED) {
-            settings.saveTreePreference(title, editor.species.id)
-        }
 
         viewModelScope.launch {
             if (editor.id == null) repository.createRecord(record) else repository.updateRecord(record)
@@ -366,6 +532,110 @@ class TimberViewModel(
 
     fun deleteAllRecords() {
         viewModelScope.launch { repository.deleteAllRecords() }
+    }
+
+    // ---------- projects ----------
+
+    fun openProjectEditor(project: Project?) {
+        _projectEditor.value = if (project == null) {
+            ProjectEditor(
+                id = null,
+                name = "",
+                color = Projects.freeColorForName("", projects.value.all, null),
+                tree = Projects.treeForName(""),
+                autoColor = true,
+                autoTree = true,
+            )
+        } else {
+            ProjectEditor(
+                id = project.id,
+                name = project.name,
+                color = project.color,
+                tree = project.tree,
+                autoColor = false,
+                autoTree = false,
+            )
+        }
+    }
+
+    fun closeProjectEditor() {
+        _projectEditor.value = null
+    }
+
+    /**
+     * Typing a name re-rolls the look, so "Reading" always arrives as the same
+     * colour and species without anyone having to choose.
+     */
+    fun setProjectEditorName(name: String) {
+        val editor = _projectEditor.value ?: return
+        val trimmed = name.take(Projects.NAME_MAX)
+        _projectEditor.value = editor.copy(
+            name = trimmed,
+            color = if (editor.autoColor) {
+                Projects.freeColorForName(trimmed.trim(), projects.value.all, editor.id)
+            } else editor.color,
+            tree = if (editor.autoTree) Projects.treeForName(trimmed.trim()) else editor.tree,
+        )
+    }
+
+    fun setProjectEditorColor(color: String) {
+        val editor = _projectEditor.value ?: return
+        _projectEditor.value = editor.copy(color = color, autoColor = false)
+    }
+
+    fun setProjectEditorTree(species: TreeSpecies) {
+        val editor = _projectEditor.value ?: return
+        _projectEditor.value = editor.copy(tree = species.id, autoTree = false)
+    }
+
+    fun projectNameIsTaken(editor: ProjectEditor): Boolean {
+        val name = editor.name.trim().lowercase()
+        if (name.isEmpty()) return false
+        return projects.value.all.any { it.id != editor.id && it.name.trim().lowercase() == name }
+    }
+
+    fun projectEditorIsValid(editor: ProjectEditor): Boolean =
+        editor.name.isNotBlank() && !projectNameIsTaken(editor)
+
+    fun saveProjectEditor() {
+        val editor = _projectEditor.value ?: return
+        if (!projectEditorIsValid(editor)) return
+
+        val existing = editor.id?.let { id -> projects.value.all.firstOrNull { it.id == id } }
+        val now = System.currentTimeMillis()
+        val project = Project(
+            id = editor.id ?: UUID.randomUUID().toString(),
+            name = editor.name.trim().take(Projects.NAME_MAX),
+            color = editor.color,
+            tree = editor.tree,
+            sortOrder = existing?.sortOrder ?: projects.value.all.size,
+            createdAt = existing?.createdAt ?: now,
+            updatedAt = now,
+        )
+
+        viewModelScope.launch {
+            repository.saveProject(project)
+            // Saving re-sorts the list, so a new project is followed by id.
+            if (editor.id == null && timer.value == null) setProject(project.id)
+            _messages.emit(UiMessage.of(R.string.toast_project_saved))
+        }
+        _projectEditor.value = null
+    }
+
+    /** How many records would move if this project were deleted. */
+    fun recordCountFor(projectId: String): Int =
+        records.value.count { it.projectId == projectId }
+
+    fun deleteProject(id: String) {
+        if (id in Projects.BUILTIN_IDS) {
+            _messages.tryEmit(UiMessage.of(R.string.toast_project_builtin))
+            return
+        }
+        viewModelScope.launch {
+            repository.deleteProject(id)
+            _messages.emit(UiMessage.of(R.string.toast_project_deleted))
+        }
+        _projectEditor.value = null
     }
 
     // ---------- to-do ----------
@@ -452,8 +722,11 @@ class TimberViewModel(
         feedback.playPreview()
     }
 
-    /** The species a name would grow, used to preview the picker's default. */
-    fun speciesFor(title: String): TreeSpecies = repository.resolveSpeciesFor(Seed.treeSeed(title))
+    /** New records snap to a quarter hour, which is where people actually put them. */
+    private fun roundToQuarter(millis: Long): Long {
+        val quarter = 15 * 60_000L
+        return (millis.toDouble() / quarter).roundToLong() * quarter
+    }
 
     companion object {
         fun factory(
@@ -467,4 +740,3 @@ class TimberViewModel(
         }
     }
 }
-

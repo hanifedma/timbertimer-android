@@ -8,8 +8,13 @@ Grab the APK from the [latest release](../../releases/latest), or build it
 yourself — both are covered below.
 
 <p align="center">
-  <img src="docs/screenshots/focus.png" width="270" alt="The focus screen: a progress ring around a growing tree, with the session name, duration presets and a tree picker below." />
-  <img src="docs/screenshots/tasks.png" width="270" alt="The to-do screen, with tasks that can be checked off, reordered and deleted." />
+  <img src="docs/screenshots/focus.png" width="240" alt="The focus screen: a progress ring around a tree, the project it belongs to, and the mode, project and task controls below." />
+  <img src="docs/screenshots/calendar.png" width="240" alt="The calendar: three days side by side, each record a block coloured by its project, with the day's total in the header." />
+  <img src="docs/screenshots/forest.png" width="240" alt="The forest: a donut of time by project beside its breakdown, and the trees grown that month in each project's colour." />
+</p>
+<p align="center">
+  <img src="docs/screenshots/project.png" width="240" alt="The project editor: a name, a grid of colour swatches, a tree picker, and a live preview." />
+  <img src="docs/screenshots/tasks.png" width="240" alt="The to-do screen, with tasks that can be checked off, reordered and deleted." />
 </p>
 <p align="center">
   <img src="docs/screenshots/widget.png" width="300" alt="The home screen widget listing three tasks with empty circles." />
@@ -23,12 +28,16 @@ Everything the web app does, plus what only a phone can:
 | | |
 |---|---|
 | **Countdown & stopwatch** | Finishing a countdown early records an abandoned session, exactly as on the web. |
-| **A tree per session** | Seven species, chosen by tapping the tree rather than reading a dropdown. The name remembers your pick; past sessions keep the tree they were planted with. |
-| **Forest** | Today / week / month, with each tree drawn at the size its session earned. |
-| **Rest stopwatch** | Plants a wilted tree; rests under a minute are dropped. |
+| **Projects** | Every record belongs to one, and the project owns its colour and its tree. Name a new project and both are picked for you; recolour it and its whole forest changes with it. |
+| **Calendar** | A day grid showing 1–7 days at once, zoomable by pinch. Tap empty space to add a record, hold a block to drag it to another time or another day, or grab its top or bottom edge to change when it started or ended. |
+| **Time by project** | A donut and a breakdown of where the day's, week's or month's hours actually went, in each project's colour. |
+| **Tasks remember their project** | Track "wash dishes" under Errands once and choosing that task picks Errands again by itself, on any device. |
+| **A tree per project** | Seven species, chosen by tapping the tree rather than reading a dropdown. Records are drawn with whatever their project grows now, so changing it re-plants the forest. |
+| **Forest** | Today / week / month, with each tree drawn at the size its session earned and in its project's colour. |
+| **Rest stopwatch** | Rest is a project like any other, so a rest can also be added by hand; rests under a minute are dropped. |
 | **To-do list** | Drag by the grip handle to reorder, synced when signed in. |
 | **Focus history** | Searchable, filterable, editable, with today/total stats. |
-| **Google sync** | The same account, the same four tables, the same rows. |
+| **Google sync** | The same account, the same five tables, the same rows. |
 | **Light / dark / system**, **English / 한국어** | Switchable in Settings. |
 | **Runs in the background** | A foreground service keeps the countdown alive and on the lock screen — and, with background sync on, keeps this device listening for changes even with the app closed. Starts itself after a reboot. |
 | **Notifications** | Live countdown in the shade, Finish and Give up actions, an alert with a buzz when a session lands, and a quiet nudge when you leave the app with nothing running. |
@@ -45,9 +54,14 @@ app's redirect has to be allow-listed once, in the same dashboard the website us
 > add `timbertimer://auth-callback`
 
 Without it Supabase refuses the redirect and sends the browser to the website
-instead, so sign-in never comes back to the app. Nothing else needs changing —
-the tables and the row-level security policies are already the ones
-`docs/supabase-schema.sql` created.
+instead, so sign-in never comes back to the app.
+
+**One thing does need changing since projects arrived.** Re-run all of the web
+repo's `docs/supabase-schema.sql` in the SQL editor — it is safe to re-run, and
+it is what adds the `projects` table and the `project_id` columns. Until then the
+app still works: projects stay on this device, records are grouped by their title
+as before, and nothing is lost — they simply do not carry their project to the
+cloud.
 
 ## Two more setup steps, both optional
 
@@ -61,6 +75,7 @@ alter publication supabase_realtime add table public.focus_sessions;
 alter publication supabase_realtime add table public.active_focus_timers;
 alter publication supabase_realtime add table public.active_rest_timers;
 alter publication supabase_realtime add table public.notes;
+alter publication supabase_realtime add table public.projects;
 ```
 
 Deletes need one thing more. On a table with row level security, a DELETE
@@ -74,6 +89,7 @@ alter table public.focus_sessions replica identity full;
 alter table public.active_focus_timers replica identity full;
 alter table public.active_rest_timers replica identity full;
 alter table public.notes replica identity full;
+alter table public.projects replica identity full;
 ```
 
 Without any of this the app still syncs — it falls back to polling every 15
@@ -132,7 +148,7 @@ there is width for it.
 ```bash
 ./gradlew assembleDebug      # app/build/outputs/apk/debug/
 ./gradlew assembleRelease    # signed, if keystore.properties is present
-./gradlew testDebugUnitTest  # 26 tests
+./gradlew testDebugUnitTest  # 49 tests
 ```
 
 `assembleRelease` signs the APK if a `keystore.properties` sits beside this file,
@@ -166,7 +182,8 @@ The short version:
 
 ```
 app/src/main/java/com/example/timbertimer/
-  core/          Time, and the seeded tree maths ported from the web client
+  core/          Time, the calendar's layout maths, and the colour and species
+                 arithmetic ported bit-for-bit from the web client
   data/          models, local store, Supabase auth + REST + Realtime, repository
   timer/         the timer engine, foreground service, notifications, sound
   ui/            Compose screens, the eight trees, theme
@@ -179,10 +196,19 @@ dozed, or rebooted without drifting — there is no state to repair on the way
 back. A foreground service keeps the process alive and the notification on
 screen; an exact alarm is the backstop if the service is ever torn down.
 
-**`core/Seed.kt` is a bit-for-bit port,** including a JavaScript multiply that
-overflows 2^53 and loses precision — and the lost bits decide which species a new
-session name gets. `SeedParityTest` pins this against values generated by running
-the website's own functions under Node, so a forest looks the same on both.
+**`core/Seed.kt` and `core/Palette.kt` are bit-for-bit ports,** including a
+JavaScript multiply that overflows 2^53 and loses precision — and the lost bits
+decide which colour and which species a new project name gets. CSS rounds every
+component of an `hsl()` to a whole number, so that rounding is reproduced too.
+`SeedParityTest` pins all of it against values generated by running the website's
+own functions under Node, so a project named "Reading" is the same indigo pine on
+the phone as on the web.
+
+**The calendar's layout is a plain Kotlin function.** Splitting a session that
+runs past midnight into two blocks, and packing overlapping ones into columns, is
+where a day grid actually goes wrong — and both are far easier to pin down in
+`CalendarLayoutTest` than by dragging blocks around on a device. The screen is
+left with placing rectangles and reading gestures.
 
 **A Realtime message triggers a full reconcile, not a row patch.** Applying the
 deltas would mean a second merge path, exercised only when two devices are in use

@@ -19,6 +19,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -40,6 +41,8 @@ import com.example.timbertimer.ui.theme.clockStyle
 fun TimerDial(
     species: TreeSpecies,
     palette: TreePalette,
+    /** The project's own colour, so a running session reads as that project. */
+    ringColor: Color,
     progress: Float,
     showRing: Boolean,
     growth: Float,
@@ -48,7 +51,6 @@ fun TimerDial(
     progressLabel: String?,
     modifier: Modifier = Modifier,
 ) {
-    val ringColor = MaterialTheme.colorScheme.primary
     val trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
 
     // Eased so a session adopted mid-flight from another device settles into

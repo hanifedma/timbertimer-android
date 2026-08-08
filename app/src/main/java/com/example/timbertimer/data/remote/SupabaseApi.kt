@@ -37,10 +37,28 @@ class SupabaseApi(
         return getList(url, token, FocusSessionRow.serializer())
     }
 
-    /** Returns the row Postgres actually stored, defaults and triggers included. */
-    suspend fun insertSession(token: String, row: FocusSessionInsert): FocusSessionRow {
+    /**
+     * Returns the row Postgres actually stored, defaults and triggers included.
+     *
+     * [withProject] is false once the caller has learned that this database
+     * predates the projects migration, in which case `project_id` is left out of
+     * the body entirely — PostgREST rejects the whole request for naming a
+     * column that does not exist.
+     */
+    suspend fun insertSession(
+        token: String,
+        row: FocusSessionInsert,
+        withProject: Boolean,
+    ): FocusSessionRow {
         val url = restUrl(SupabaseConfig.SESSIONS_TABLE).build()
-        val payload = json.encodeToString(ListSerializer(FocusSessionInsert.serializer()), listOf(row))
+        val payload = if (withProject) {
+            json.encodeToString(ListSerializer(FocusSessionInsert.serializer()), listOf(row))
+        } else {
+            json.encodeToString(
+                ListSerializer(FocusSessionInsertLegacy.serializer()),
+                listOf(row.withoutProject()),
+            )
+        }
         val body = executeForBody(
             authorized(url, token)
                 .addHeader("Content-Type", JSON)
@@ -56,12 +74,17 @@ class SupabaseApi(
         userId: String,
         id: String,
         update: FocusSessionUpdate,
+        withProject: Boolean,
     ): FocusSessionRow {
         val url = restUrl(SupabaseConfig.SESSIONS_TABLE)
             .addQueryParameter("user_id", "eq.$userId")
             .addQueryParameter("id", "eq.$id")
             .build()
-        val payload = json.encodeToString(FocusSessionUpdate.serializer(), update)
+        val payload = if (withProject) {
+            json.encodeToString(FocusSessionUpdate.serializer(), update)
+        } else {
+            json.encodeToString(FocusSessionUpdateLegacy.serializer(), update.withoutProject())
+        }
         val body = executeForBody(
             authorized(url, token)
                 .addHeader("Content-Type", JSON)
@@ -75,18 +98,50 @@ class SupabaseApi(
     }
 
     /**
+     * Repoints a set of records at another project, which is what deleting one
+     * does to its records rather than orphaning them.
+     */
+    suspend fun moveSessionsToProject(
+        token: String,
+        userId: String,
+        ids: List<String>,
+        update: SessionProjectUpdate,
+    ) {
+        if (ids.isEmpty()) return
+        val url = restUrl(SupabaseConfig.SESSIONS_TABLE)
+            .addQueryParameter("user_id", "eq.$userId")
+            .addQueryParameter("id", "in.(${ids.joinToString(",")})")
+            .build()
+        val payload = json.encodeToString(SessionProjectUpdate.serializer(), update)
+        execute(
+            authorized(url, token)
+                .addHeader("Content-Type", JSON)
+                .addHeader("Prefer", "return=minimal")
+                .patch(payload.toRequestBody(JSON.toMediaType()))
+                .build()
+        )
+    }
+
+    /**
      * Uploads records that were held back while the network was gone.
      *
      * Upsert rather than insert because a retry can follow a save that actually
      * reached Postgres but whose response never made it back. Conflicting on the
      * id makes replaying the outbox harmless however many times it happens.
      */
-    suspend fun upsertSessions(token: String, rows: List<FocusSessionInsert>) {
+    suspend fun upsertSessions(token: String, rows: List<FocusSessionInsert>, withProject: Boolean) {
         if (rows.isEmpty()) return
         val url = restUrl(SupabaseConfig.SESSIONS_TABLE)
             .addQueryParameter("on_conflict", "id")
             .build()
-        val payload = json.encodeToString(ListSerializer(FocusSessionInsert.serializer()), rows)
+        val payload = if (withProject) {
+            json.encodeToString(ListSerializer(FocusSessionInsert.serializer()), rows)
+        } else {
+            json.encodeToString(
+                ListSerializer(FocusSessionInsertLegacy.serializer()),
+                rows.map { it.withoutProject() },
+            )
+        }
         execute(
             authorized(url, token)
                 .addHeader("Content-Type", JSON)
@@ -122,11 +177,18 @@ class SupabaseApi(
         return getList(url, token, ActiveTimerRow.serializer()).firstOrNull()
     }
 
-    suspend fun upsertActiveTimer(token: String, row: ActiveTimerUpsert) {
+    suspend fun upsertActiveTimer(token: String, row: ActiveTimerUpsert, withProject: Boolean) {
         val url = restUrl(SupabaseConfig.ACTIVE_TIMERS_TABLE)
             .addQueryParameter("on_conflict", "user_id")
             .build()
-        val payload = json.encodeToString(ListSerializer(ActiveTimerUpsert.serializer()), listOf(row))
+        val payload = if (withProject) {
+            json.encodeToString(ListSerializer(ActiveTimerUpsert.serializer()), listOf(row))
+        } else {
+            json.encodeToString(
+                ListSerializer(ActiveTimerUpsertLegacy.serializer()),
+                listOf(row.withoutProject()),
+            )
+        }
         execute(
             authorized(url, token)
                 .addHeader("Content-Type", JSON)
@@ -272,6 +334,39 @@ class SupabaseApi(
         execute(authorized(url, token).delete().build())
     }
 
+    // ---------- projects ----------
+
+    /**
+     * The projects table only exists once the updated SQL has been run, so every
+     * caller has to be ready for this to fail and fall back to the device's own
+     * copy rather than treating it as a lost account.
+     */
+    suspend fun fetchProjects(token: String, userId: String): List<ProjectRow> {
+        val url = restUrl(SupabaseConfig.PROJECTS_TABLE)
+            .addQueryParameter("select", "*")
+            .addQueryParameter("user_id", "eq.$userId")
+            .addQueryParameter("order", "sort_order.asc")
+            .build()
+        return getList(url, token, ProjectRow.serializer())
+    }
+
+    /** The primary key is (user_id, id), so that is what a conflict resolves on. */
+    suspend fun upsertProjects(token: String, rows: List<ProjectUpsert>) {
+        if (rows.isEmpty()) return
+        val url = restUrl(SupabaseConfig.PROJECTS_TABLE)
+            .addQueryParameter("on_conflict", "user_id,id")
+            .build()
+        postUpsert(url, token, json.encodeToString(ListSerializer(ProjectUpsert.serializer()), rows))
+    }
+
+    suspend fun deleteProject(token: String, userId: String, id: String) {
+        val url = restUrl(SupabaseConfig.PROJECTS_TABLE)
+            .addQueryParameter("user_id", "eq.$userId")
+            .addQueryParameter("id", "eq.$id")
+            .build()
+        execute(authorized(url, token).delete().build())
+    }
+
     // ---------- plumbing ----------
 
     private suspend fun postUpsert(url: HttpUrl, token: String, payload: String) {
@@ -339,3 +434,43 @@ class SupabaseApi(
 
 /** Notes as stored remotely, plus whether the server could order them. */
 data class NotesPage(val rows: List<NoteRow>, val orderedRemotely: Boolean)
+
+// The same payloads with `project_id` dropped, for a database that has not had
+// the projects migration run against it yet.
+
+private fun FocusSessionInsert.withoutProject() = FocusSessionInsertLegacy(
+    id = id,
+    userId = userId,
+    title = title,
+    durationMinutes = durationMinutes,
+    actualMinutes = actualMinutes,
+    status = status,
+    startedAt = startedAt,
+    endedAt = endedAt,
+    treeKind = treeKind,
+    createdAt = createdAt,
+    updatedAt = updatedAt,
+)
+
+private fun FocusSessionUpdate.withoutProject() = FocusSessionUpdateLegacy(
+    title = title,
+    durationMinutes = durationMinutes,
+    actualMinutes = actualMinutes,
+    status = status,
+    startedAt = startedAt,
+    endedAt = endedAt,
+    treeKind = treeKind,
+    updatedAt = updatedAt,
+)
+
+private fun ActiveTimerUpsert.withoutProject() = ActiveTimerUpsertLegacy(
+    userId = userId,
+    timerId = timerId,
+    mode = mode,
+    title = title,
+    durationMinutes = durationMinutes,
+    durationSeconds = durationSeconds,
+    startedAt = startedAt,
+    endAt = endAt,
+    updatedAt = updatedAt,
+)

@@ -108,12 +108,12 @@ class SettingsStore(context: Context) {
     }
 
     private val _duration = MutableStateFlow(
-        prefs.getInt(KEY_DURATION, Limits.DEFAULT_DURATION).coerceIn(1, Limits.MINUTES_MAX)
+        prefs.getInt(KEY_DURATION, Limits.DEFAULT_DURATION).coerceIn(1, Limits.TIMER_MINUTES_MAX)
     )
     val duration: StateFlow<Int> = _duration.asStateFlow()
 
     fun setDuration(minutes: Int) {
-        val safe = minutes.coerceIn(1, Limits.MINUTES_MAX)
+        val safe = minutes.coerceIn(1, Limits.TIMER_MINUTES_MAX)
         prefs.edit().putInt(KEY_DURATION, safe).apply()
         _duration.value = safe
     }
@@ -130,43 +130,112 @@ class SettingsStore(context: Context) {
     /** True until the user has focused once, so startup can seed the name from history. */
     fun hasSessionName(): Boolean = !prefs.getString(KEY_SESSION_NAME, null).isNullOrBlank()
 
-    // ---------- remembered tree per session name ----------
+    // ---------- the chosen project ----------
 
     /**
-     * "eating ayam" should keep growing the palm you once chose for it. Keyed by
-     * the lowercased name, exactly as the web app keys its own preference map,
-     * so the two clients agree on what a name means.
+     * Which project the next session will be filed under. Empty until something
+     * has been chosen, so startup can pick the project of the last session
+     * instead of forcing the default one.
      */
-    fun treePreference(name: String): String? = treePrefs()[prefKey(name)]
+    private val _selectedProjectId = MutableStateFlow(prefs.getString(KEY_PROJECT, null).orEmpty())
+    val selectedProjectId: StateFlow<String> = _selectedProjectId.asStateFlow()
 
-    fun saveTreePreference(name: String, speciesId: String) {
-        val updated = treePrefs().toMutableMap().apply { put(prefKey(name), speciesId) }
+    fun setSelectedProjectId(id: String) {
+        prefs.edit().putString(KEY_PROJECT, id).apply()
+        _selectedProjectId.value = id
+    }
+
+    // ---------- task ↔ project ----------
+
+    /**
+     * A task name belongs to a project: track "wash dishes" under Errands once,
+     * and choosing that task picks Errands again by itself.
+     *
+     * What was last chosen on *this* device wins. Failing that the answer comes
+     * from history, which syncs — so the pairing still follows the account onto
+     * another device. Keyed by the lowercased name, exactly as the web app keys
+     * its own map, so both clients agree on what a name means.
+     */
+    fun projectForTask(title: String): String? = taskProjects()[prefKey(title)]
+
+    fun rememberTaskProject(title: String, projectId: String) {
+        val key = prefKey(title)
+        val current = taskProjects()
+        if (current[key] == projectId) return
+        val updated = current.toMutableMap().apply { put(key, projectId) }
         prefs.edit()
-            .putString(KEY_TREE_PREFS, json.encodeToString(MAP_SERIALIZER, updated))
+            .putString(KEY_TASK_PROJECTS, json.encodeToString(MAP_SERIALIZER, updated))
             .apply()
     }
 
-    private fun treePrefs(): Map<String, String> {
-        val raw = prefs.getString(KEY_TREE_PREFS, null) ?: return emptyMap()
+    private fun taskProjects(): Map<String, String> = readMap(KEY_TASK_PROJECTS)
+
+    /**
+     * The per-name tree choices made by the version before projects existed.
+     *
+     * Read only: they are folded into the projects those names became, the first
+     * time a project has to be invented for an old record.
+     */
+    fun legacyTreePreference(name: String): String? = readMap(KEY_TREE_PREFS)[prefKey(name)]
+
+    // ---------- calendar ----------
+
+    private val _calendarDays = MutableStateFlow(
+        prefs.getInt(KEY_CAL_DAYS, CALENDAR_DEFAULT_DAYS).coerceIn(1, CALENDAR_MAX_DAYS)
+    )
+    val calendarDays: StateFlow<Int> = _calendarDays.asStateFlow()
+
+    fun setCalendarDays(days: Int) {
+        val safe = days.coerceIn(1, CALENDAR_MAX_DAYS)
+        prefs.edit().putInt(KEY_CAL_DAYS, safe).apply()
+        _calendarDays.value = safe
+    }
+
+    /** Calendar zoom, in density-independent pixels per hour. */
+    private val _calendarZoom = MutableStateFlow(
+        prefs.getFloat(KEY_CAL_ZOOM, CALENDAR_DEFAULT_ZOOM)
+            .coerceIn(CALENDAR_MIN_ZOOM, CALENDAR_MAX_ZOOM)
+    )
+    val calendarZoom: StateFlow<Float> = _calendarZoom.asStateFlow()
+
+    fun setCalendarZoom(zoom: Float) {
+        val safe = zoom.coerceIn(CALENDAR_MIN_ZOOM, CALENDAR_MAX_ZOOM)
+        prefs.edit().putFloat(KEY_CAL_ZOOM, safe).apply()
+        _calendarZoom.value = safe
+    }
+
+    private fun readMap(key: String): Map<String, String> {
+        val raw = prefs.getString(key, null) ?: return emptyMap()
         return runCatching { json.decodeFromString(MAP_SERIALIZER, raw) }.getOrElse { emptyMap() }
     }
 
     private fun prefKey(name: String): String =
         name.trim().lowercase().ifEmpty { "deep focus" }
 
-    private companion object {
-        const val PREFS_NAME = "timbertimer-settings"
-        const val KEY_THEME = "theme"
-        const val KEY_SOUND = "sound-enabled"
-        const val KEY_VOLUME = "sound-volume"
-        const val KEY_VIBRATE = "vibrate"
-        const val KEY_IDLE_REMINDER = "idle-reminder"
-        const val KEY_BACKGROUND_SYNC = "background-sync"
-        const val KEY_TIMER_MODE = "timer-mode"
-        const val KEY_DURATION = "duration"
-        const val KEY_SESSION_NAME = "session-name"
-        const val KEY_TREE_PREFS = "tree-prefs"
+    companion object {
+        const val CALENDAR_MIN_ZOOM = 26f
+        const val CALENDAR_MAX_ZOOM = 240f
+        const val CALENDAR_DEFAULT_ZOOM = 64f
+        const val CALENDAR_ZOOM_STEP = 1.3f
+        const val CALENDAR_DEFAULT_DAYS = 3
+        const val CALENDAR_MAX_DAYS = 7
 
-        val MAP_SERIALIZER = MapSerializer(String.serializer(), String.serializer())
+        private const val PREFS_NAME = "timbertimer-settings"
+        private const val KEY_THEME = "theme"
+        private const val KEY_SOUND = "sound-enabled"
+        private const val KEY_VOLUME = "sound-volume"
+        private const val KEY_VIBRATE = "vibrate"
+        private const val KEY_IDLE_REMINDER = "idle-reminder"
+        private const val KEY_BACKGROUND_SYNC = "background-sync"
+        private const val KEY_TIMER_MODE = "timer-mode"
+        private const val KEY_DURATION = "duration"
+        private const val KEY_SESSION_NAME = "session-name"
+        private const val KEY_TREE_PREFS = "tree-prefs"
+        private const val KEY_PROJECT = "selected-project"
+        private const val KEY_TASK_PROJECTS = "task-projects"
+        private const val KEY_CAL_DAYS = "calendar-days"
+        private const val KEY_CAL_ZOOM = "calendar-zoom"
+
+        private val MAP_SERIALIZER = MapSerializer(String.serializer(), String.serializer())
     }
 }

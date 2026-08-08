@@ -8,12 +8,18 @@
     <string name="nav_forest">Forest</string>
     <string name="nav_tasks">To-Do</string>
     <string name="nav_records">Records</string>
+    <string name="nav_calendar">Calendar</string>
     <string name="nav_settings">Settings</string>
 
     <!-- Timer -->
     <string name="mode_countdown">Countdown</string>
     <string name="mode_stopwatch">Stopwatch</string>
     <string name="field_session">Session</string>
+    <string name="field_task">Task</string>
+    <string name="field_task_optional">Task name (optional)</string>
+    <string name="field_ended">Ended</string>
+    <string name="field_project">Project</string>
+    <string name="field_tree_project">Tree (per project)</string>
     <string name="field_duration">Duration</string>
     <string name="field_custom">Custom</string>
     <string name="field_tree">Tree</string>
@@ -71,10 +77,13 @@
     <string name="record_abandoned">Abandoned</string>
     <string name="metric_focused">%1$dm focused</string>
     <string name="metric_goal">%1$dm goal</string>
+    <string name="metric_focused_text">%1$s focused</string>
     <string name="action_edit">Edit</string>
     <string name="action_delete">Delete</string>
     <string name="dialog_edit_session">Edit session</string>
     <string name="dialog_add_session">Add session</string>
+    <string name="dialog_end_before_start">The end time is before the start time.</string>
+    <string name="dialog_too_long">A record cannot be longer than a day.</string>
 
     <!-- Forest -->
     <string name="grove_weekly">Weekly forest</string>
@@ -95,6 +104,44 @@
         <item quantity="one">1 tree</item>
         <item quantity="other">%1$d trees</item>
     </plurals>
+
+    <!-- Projects -->
+    <string name="project_kicker">Projects</string>
+    <string name="project_manage">Manage projects</string>
+    <string name="project_manage_desc">A project owns its colour and its tree, so recolouring one re-plants its whole forest.</string>
+    <string name="project_new">New project</string>
+    <string name="project_edit">Edit project</string>
+    <string name="project_name">Project name</string>
+    <string name="project_color">Colour</string>
+    <string name="project_delete">Delete project</string>
+    <string name="project_default_name">Focus</string>
+    <string name="project_rest_name">Rest</string>
+    <string name="project_none">No project</string>
+    <string name="project_name_taken">A project with that name already exists.</string>
+    <plurals name="project_records">
+        <item quantity="one">1 record</item>
+        <item quantity="other">%1$d records</item>
+    </plurals>
+    <string name="confirm_delete_project">Delete “%1$s”? Its %2$d records move to “%3$s”.</string>
+    <string name="toast_project_saved">Project saved.</string>
+    <string name="toast_project_deleted">Project deleted.</string>
+    <string name="toast_project_builtin">Built-in projects cannot be deleted.</string>
+    <string name="toast_cloud_projects_fail">Project sync failed. Saved on this device.</string>
+
+    <!-- Time by project -->
+    <string name="summary_kicker">Projects</string>
+    <string name="summary_title">Time by project</string>
+    <string name="summary_empty">No time tracked in this period.</string>
+
+    <!-- Calendar -->
+    <string name="calendar_title">Calendar</string>
+    <string name="calendar_today">Today</string>
+    <string name="calendar_prev">Previous</string>
+    <string name="calendar_next">Next</string>
+    <string name="calendar_zoom_in">Zoom in</string>
+    <string name="calendar_zoom_out">Zoom out</string>
+    <string name="calendar_running">Running</string>
+    <string name="calendar_hint">Tap to edit · hold to drag · pinch to zoom</string>
 
     <!-- Account -->
     <string name="account_kicker">Accounts</string>

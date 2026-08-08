@@ -33,4 +33,5 @@ object SupabaseConfig {
     const val ACTIVE_TIMERS_TABLE = "active_focus_timers"
     const val ACTIVE_RESTS_TABLE = "active_rest_timers"
     const val NOTES_TABLE = "notes"
+    const val PROJECTS_TABLE = "projects"
 }

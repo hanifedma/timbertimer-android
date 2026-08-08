@@ -1,7 +1,6 @@
 package com.example.timbertimer.data
 
 import com.example.timbertimer.R
-import com.example.timbertimer.core.Seed
 import com.example.timbertimer.core.Time
 import com.example.timbertimer.core.UiMessage
 import com.example.timbertimer.data.local.LocalStore
@@ -11,16 +10,19 @@ import com.example.timbertimer.data.model.DataMode
 import com.example.timbertimer.data.model.FocusRecord
 import com.example.timbertimer.data.model.Limits
 import com.example.timbertimer.data.model.Note
+import com.example.timbertimer.data.model.Project
+import com.example.timbertimer.data.model.ProjectBook
+import com.example.timbertimer.data.model.Projects
 import com.example.timbertimer.data.model.RecordStatus
 import com.example.timbertimer.data.model.TimerMode
 import com.example.timbertimer.data.model.TreeSpecies
 import com.example.timbertimer.data.remote.ActiveTimerUpsert
-import com.example.timbertimer.data.remote.FocusSessionRow
 import com.example.timbertimer.data.remote.NoteDoneUpdate
 import com.example.timbertimer.data.remote.NoteRow
 import com.example.timbertimer.data.remote.NoteUpsert
 import com.example.timbertimer.data.remote.RestTimerUpsert
 import com.example.timbertimer.data.remote.Session
+import com.example.timbertimer.data.remote.SessionProjectUpdate
 import com.example.timbertimer.data.remote.SupabaseApi
 import com.example.timbertimer.data.remote.SupabaseAuth
 import kotlinx.coroutines.CoroutineScope
@@ -35,11 +37,12 @@ import kotlinx.coroutines.sync.withLock
 import java.util.UUID
 
 /**
- * The single source of truth for records, to-dos and the shared timer rows.
+ * The single source of truth for projects, records, to-dos and the shared timer
+ * rows.
  *
  * Mirrors the web client's model: local-first, with the cloud taking over
  * entirely once an account is connected. Both clients read and write the same
- * four tables, so a tree planted on the phone is on the website when it loads.
+ * five tables, so a tree planted on the phone is on the website when it loads.
  */
 class TimberRepository(
     private val local: LocalStore,
@@ -51,6 +54,9 @@ class TimberRepository(
 
     private val _records = MutableStateFlow<List<FocusRecord>>(emptyList())
     val records: StateFlow<List<FocusRecord>> = _records.asStateFlow()
+
+    private val _projects = MutableStateFlow(ProjectBook.EMPTY)
+    val projects: StateFlow<ProjectBook> = _projects.asStateFlow()
 
     private val _notes = MutableStateFlow<List<Note>>(emptyList())
     val notes: StateFlow<List<Note>> = _notes.asStateFlow()
@@ -68,21 +74,48 @@ class TimberRepository(
      *  every resume. Opening the app on a train should not nag five times. */
     private var cloudReachable = true
 
+    /**
+     * Set once this database is found to predate the projects migration.
+     *
+     * The app keeps working either way — projects simply stay on the device and
+     * records fall back to being grouped by their title — so this is a quiet
+     * downgrade rather than an error. Re-running `docs/supabase-schema.sql` on
+     * the Supabase project is what turns it back on.
+     */
+    private var projectsTableMissing = false
+    private var sessionProjectColumnMissing = false
+    private var activeTimerProjectColumnMissing = false
+
     /** Serialises whole-list note writes so two quick taps cannot interleave. */
     private val notesLock = Mutex()
 
+    /** Serialises project writes, which read-modify-write the whole list. */
+    private val projectsLock = Mutex()
+
     init {
         // Paint from disk first; the network can take its time.
-        _records.value = local.readSessions().map(::normalize).sortedByDescending { it.startedAt }
+        _projects.value = ProjectBook(local.readProjects().map(RecordMapper::toProject))
+        _records.value = local.readSessions().map(RecordMapper::normalize).sortedByDescending { it.startedAt }
         _notes.value = applyStoredOrder(local.readNotes()).map(::toNote)
+        scope.launch { reconcileProjects() }
 
         scope.launch {
             auth.sessionFlow.collect { session ->
-                val changed = _session.value?.userId != session?.userId
+                val previous = _session.value?.userId
+                val changed = previous != session?.userId
                 _session.value = session
                 _dataMode.value = if (session != null) DataMode.CLOUD else DataMode.LOCAL
                 if (changed) {
                     if (session == null) local.clearCloudCache()
+                    // Signing in or out swaps the whole project list, so the id
+                    // that was selected means nothing in the new one. Only an
+                    // actual switch clears it — the first time an already-signed-
+                    // in session is resolved at startup is not a switch, and
+                    // must not throw away what the user last chose.
+                    if (previous != null) settings.setSelectedProjectId("")
+                    projectsTableMissing = false
+                    sessionProjectColumnMissing = false
+                    activeTimerProjectColumnMissing = false
                     refresh()
                 }
             }
@@ -93,7 +126,9 @@ class TimberRepository(
 
     /** Reloads everything from whichever store is currently authoritative. */
     suspend fun refresh() {
+        loadProjects()
         loadRecords()
+        reconcileProjects()
         loadNotes()
     }
 
@@ -112,7 +147,8 @@ class TimberRepository(
     private suspend fun loadRecords() {
         val user = _session.value
         if (user == null) {
-            _records.value = local.readSessions().map(::normalize).sortedByDescending { it.startedAt }
+            _records.value = local.readSessions().map(RecordMapper::normalize)
+                .sortedByDescending { it.startedAt }
             _dataMode.value = DataMode.LOCAL
             return
         }
@@ -135,7 +171,7 @@ class TimberRepository(
         runCatching { api.fetchSessions(token, user.userId) }
             .onSuccess { rows ->
                 local.writeCloudCache(user.userId, rows)
-                _records.value = rows.map(::normalize).sortedByDescending { it.startedAt }
+                _records.value = rows.map(RecordMapper::normalize).sortedByDescending { it.startedAt }
                 _dataMode.value = DataMode.CLOUD
                 cloudReachable = true
             }
@@ -156,7 +192,7 @@ class TimberRepository(
         val cached = local.readCloudCache(userId) + local.readPending(userId)
         _records.value = cached
             .distinctBy { it.id }
-            .map(::normalize)
+            .map(RecordMapper::normalize)
             .sortedByDescending { it.startedAt }
         _dataMode.value = DataMode.CLOUD
     }
@@ -164,9 +200,14 @@ class TimberRepository(
     private suspend fun flushPending(token: String, userId: String) {
         val pending = local.readPending(userId)
         if (pending.isEmpty()) return
-        runCatching { api.upsertSessions(token, pending.map { RecordMapper.toInsert(it, userId) }) }
-            .onSuccess { local.writePending(userId, emptyList()) }
-            .onFailure { logSync(it) }
+        val rows = pending.map { RecordMapper.toInsert(it, userId) }
+        val sent = runCatching { api.upsertSessions(token, rows, !sessionProjectColumnMissing) }
+            .recoverCatching {
+                if (sessionProjectColumnMissing) throw it
+                sessionProjectColumnMissing = true
+                api.upsertSessions(token, rows, withProject = false)
+            }
+        sent.onSuccess { local.writePending(userId, emptyList()) }.onFailure { logSync(it) }
     }
 
     private suspend fun loadNotes() {
@@ -212,10 +253,11 @@ class TimberRepository(
                 return
             }
 
-        val incoming = rows.map(::normalize).sortedByDescending { it.startedAt }
+        val incoming = rows.map(RecordMapper::normalize).sortedByDescending { it.startedAt }
         if (incoming == _records.value) return
         local.writeCloudCache(user.userId, rows)
         _records.value = incoming
+        reconcileProjects()
     }
 
     /** Polled while the app is open, so an edit made elsewhere lands here too. */
@@ -231,6 +273,241 @@ class TimberRepository(
         }
     }
 
+    /**
+     * Projects change rarely, so this only repaints when something actually
+     * differs — a colour picked on the laptop lands here without a refresh.
+     */
+    suspend fun refreshProjectsFromCloud() {
+        if (_session.value == null || projectsTableMissing) return
+        loadProjects()
+        reconcileProjects()
+    }
+
+    // ---------- projects ----------
+
+    private suspend fun loadProjects() {
+        val user = _session.value
+        if (user == null) {
+            _projects.value = ProjectBook(local.readProjects().map(RecordMapper::toProject))
+            return
+        }
+
+        // Whatever was last seen for this account, so the forest keeps its
+        // colours while the fetch is in flight.
+        val cached = local.readCloudProjects(user.userId)
+        if (cached.isNotEmpty()) _projects.value = ProjectBook(cached.map(RecordMapper::toProject))
+
+        if (projectsTableMissing) return
+        val token = auth.validAccessToken() ?: return
+
+        runCatching { api.fetchProjects(token, user.userId) }
+            .onSuccess { rows ->
+                local.writeCloudProjects(user.userId, rows)
+                _projects.value = ProjectBook(rows.map(RecordMapper::toProject))
+            }
+            .onFailure { error ->
+                // The table only exists once the updated SQL has been run; until
+                // then this device's own projects carry on working.
+                projectsTableMissing = true
+                logSync(error)
+                if (cached.isEmpty()) {
+                    _projects.value = ProjectBook(local.readProjects().map(RecordMapper::toProject))
+                }
+            }
+    }
+
+    /**
+     * Makes sure every project a record points at exists.
+     *
+     * Seeds the two built-ins on a fresh install, and rebuilds a project for
+     * each distinct title used before projects existed — carrying the tree that
+     * title already grew, so an existing forest looks unchanged. Ids and colours
+     * are derived from the name, so two devices converge on the same result
+     * without having to coordinate.
+     */
+    private suspend fun reconcileProjects() = projectsLock.withLock {
+        val now = System.currentTimeMillis()
+        val existing = _projects.value.all.associateBy { it.id }.toMutableMap()
+        val created = mutableListOf<Project>()
+
+        fun ensure(project: Project) {
+            if (existing.containsKey(project.id)) return
+            existing[project.id] = project
+            created += project
+        }
+
+        ensure(Projects.builtIn(Projects.DEFAULT_ID, now))
+        ensure(Projects.builtIn(Projects.REST_ID, now))
+
+        _records.value.forEach { record ->
+            val id = record.projectId
+            if (!id.startsWith(Projects.LEGACY_PREFIX) || existing.containsKey(id)) return@forEach
+            val name = record.title.trim().ifEmpty { Limits.DEFAULT_TITLE }
+            ensure(
+                Project(
+                    id = id,
+                    name = name.take(Projects.NAME_MAX),
+                    color = Projects.colorForName(name),
+                    tree = legacyTreeFor(name, record),
+                    sortOrder = 100,
+                    createdAt = now,
+                    updatedAt = now,
+                )
+            )
+        }
+
+        if (created.isEmpty()) return@withLock
+
+        val merged = ProjectBook(existing.values.toList())
+        _projects.value = merged
+        persistProjects(merged.all)
+        pushProjects(created)
+    }
+
+    /**
+     * The species a migrated project should keep: an explicit per-name choice
+     * made with the old tree picker first, then whatever that title last grew.
+     */
+    private fun legacyTreeFor(name: String, record: FocusRecord): String {
+        TreeSpecies.byId(settings.legacyTreePreference(name))
+            ?.takeIf { it != TreeSpecies.WILTED }
+            ?.let { return it.id }
+        TreeSpecies.byLabel(record.treeKind)
+            ?.takeIf { it != TreeSpecies.WILTED }
+            ?.let { return it.id }
+        return Projects.treeForName(name)
+    }
+
+    /** Saves one project, creating it if the id is new. */
+    suspend fun saveProject(project: Project) {
+        projectsLock.withLock {
+            val normalized = Projects.normalize(
+                id = project.id,
+                name = project.name,
+                color = project.color,
+                tree = project.tree,
+                sortOrder = project.sortOrder,
+                createdAt = project.createdAt,
+                updatedAt = System.currentTimeMillis(),
+            )
+            val merged = _projects.value.all.filterNot { it.id == normalized.id } + normalized
+            val book = ProjectBook(merged)
+            _projects.value = book
+            persistProjects(book.all)
+            pushProjects(listOf(normalized))
+        }
+    }
+
+    /**
+     * Deletes a project and moves its records onto the default one, rather than
+     * orphaning them — nothing should silently disappear from the history.
+     */
+    suspend fun deleteProject(id: String) {
+        if (id in Projects.BUILTIN_IDS) return
+        val target = Projects.DEFAULT_ID
+        val affected = _records.value.filter { it.projectId == id }
+
+        if (affected.isNotEmpty()) moveRecordsToProject(affected, target)
+
+        projectsLock.withLock {
+            val book = ProjectBook(_projects.value.all.filterNot { it.id == id })
+            _projects.value = book
+            persistProjects(book.all)
+
+            val user = _session.value
+            val token = if (user != null && !projectsTableMissing) auth.validAccessToken() else null
+            if (user != null && token != null) {
+                runCatching { api.deleteProject(token, user.userId, id) }.onFailure { logSync(it) }
+            }
+        }
+
+        if (settings.selectedProjectId.value == id) settings.setSelectedProjectId(target)
+    }
+
+    private suspend fun moveRecordsToProject(affected: List<FocusRecord>, target: String) {
+        val now = System.currentTimeMillis()
+        val targetProject = _projects.value[target]
+        val moved = affected.associate { record ->
+            record.id to record.copy(
+                projectId = target,
+                treeKind = RecordMapper.pickTreeKind(targetProject, record.status),
+                updatedAt = now,
+            )
+        }
+        _records.value = _records.value.map { moved[it.id] ?: it }
+
+        val user = _session.value
+        if (user == null) {
+            local.writeSessions(
+                local.readSessions().map { row ->
+                    moved[row.id]?.let { RecordMapper.toRow(it, null) } ?: row
+                }
+            )
+            return
+        }
+
+        val token = auth.validAccessToken() ?: return
+        if (sessionProjectColumnMissing) return
+        runCatching {
+            api.moveSessionsToProject(
+                token,
+                user.userId,
+                affected.map { it.id },
+                SessionProjectUpdate(projectId = target, updatedAt = Time.toIso(now)),
+            )
+        }.onFailure {
+            sessionProjectColumnMissing = true
+            logSync(it)
+        }
+        local.writeCloudCache(user.userId, _records.value.map { RecordMapper.toRow(it, user.userId) })
+    }
+
+    private fun persistProjects(projects: List<Project>) {
+        val rows = projects.map(RecordMapper::toProjectRow)
+        val user = _session.value
+        if (user == null) local.writeProjects(rows) else local.writeCloudProjects(user.userId, rows)
+    }
+
+    private suspend fun pushProjects(projects: List<Project>) {
+        if (projects.isEmpty() || projectsTableMissing) return
+        val user = _session.value ?: return
+        val token = auth.validAccessToken() ?: return
+        runCatching {
+            api.upsertProjects(token, projects.map { RecordMapper.toProjectUpsert(it, user.userId) })
+        }.onFailure {
+            projectsTableMissing = true
+            logSync(it)
+            _messages.tryEmit(UiMessage.of(R.string.toast_cloud_projects_fail))
+        }
+    }
+
+    /**
+     * The project a task name belongs to: what was last chosen for it on this
+     * device, then the project of the most recent session with that name.
+     *
+     * Returns null when the name is new, so the caller keeps whatever is already
+     * selected rather than being thrown back to the default.
+     */
+    fun projectForTitle(title: String): String? {
+        val key = title.trim().lowercase()
+        if (key.isEmpty()) return null
+        val book = _projects.value
+
+        settings.projectForTask(key)?.takeIf { book.contains(it) }?.let { return it }
+
+        return _records.value
+            .filter { it.title.trim().lowercase() == key }
+            .maxByOrNull { it.startedAt }
+            ?.projectId
+            ?.takeIf { book.contains(it) }
+    }
+
+    fun rememberTaskProject(title: String, projectId: String) {
+        val key = title.trim().lowercase()
+        if (key.isEmpty()) return
+        settings.rememberTaskProject(key, projectId)
+    }
+
     // ---------- records ----------
 
     /**
@@ -241,6 +518,7 @@ class TimberRepository(
      * thing that should go missing because a tunnel ate the request.
      */
     suspend fun createRecord(record: FocusRecord): FocusRecord {
+        rememberTaskProject(record.title, record.projectId)
         val user = _session.value
         val token = if (user != null) auth.validAccessToken() else null
 
@@ -257,9 +535,18 @@ class TimberRepository(
                 return record
             }
 
-            val result = runCatching { api.insertSession(token, RecordMapper.toInsert(record, user.userId)) }
+            val insert = RecordMapper.toInsert(record, user.userId)
+            val result = runCatching { api.insertSession(token, insert, !sessionProjectColumnMissing) }
+                .recoverCatching { error ->
+                    // Most likely this database predates the projects migration;
+                    // retry without the column rather than lose the session.
+                    if (sessionProjectColumnMissing) throw error
+                    sessionProjectColumnMissing = true
+                    api.insertSession(token, insert, withProject = false)
+                }
+
             result.onSuccess { row ->
-                val saved = normalize(row)
+                val saved = RecordMapper.normalize(row)
                 local.writePending(user.userId, local.readPending(user.userId).filterNot { it.id == record.id })
                 _records.value = (listOf(saved) + _records.value.filterNot { it.id == saved.id })
                     .sortedByDescending { it.startedAt }
@@ -274,12 +561,14 @@ class TimberRepository(
         val rows = listOf(RecordMapper.toRow(record, null)) +
             local.readSessions().filterNot { it.id == record.id }
         local.writeSessions(rows)
-        _records.value = rows.map(::normalize).sortedByDescending { it.startedAt }
+        _records.value = rows.map(RecordMapper::normalize).sortedByDescending { it.startedAt }
+        reconcileProjects()
         return record
     }
 
     suspend fun updateRecord(record: FocusRecord) {
         val updated = record.copy(updatedAt = System.currentTimeMillis())
+        rememberTaskProject(updated.title, updated.projectId)
         val user = _session.value
 
         if (user != null) {
@@ -288,9 +577,17 @@ class TimberRepository(
                 _messages.tryEmit(UiMessage.of(R.string.toast_cloud_update_fail))
                 return
             }
-            runCatching { api.updateSession(token, user.userId, updated.id, RecordMapper.toUpdate(updated)) }
+            val payload = RecordMapper.toUpdate(updated)
+            runCatching {
+                api.updateSession(token, user.userId, updated.id, payload, !sessionProjectColumnMissing)
+            }
+                .recoverCatching { error ->
+                    if (sessionProjectColumnMissing) throw error
+                    sessionProjectColumnMissing = true
+                    api.updateSession(token, user.userId, updated.id, payload, withProject = false)
+                }
                 .onSuccess { row ->
-                    val saved = normalize(row)
+                    val saved = RecordMapper.normalize(row)
                     _records.value = _records.value
                         .map { if (it.id == saved.id) saved else it }
                         .sortedByDescending { it.startedAt }
@@ -307,7 +604,7 @@ class TimberRepository(
             if (it.id == updated.id) RecordMapper.toRow(updated, null) else it
         }
         local.writeSessions(rows)
-        _records.value = rows.map(::normalize).sortedByDescending { it.startedAt }
+        _records.value = rows.map(RecordMapper::normalize).sortedByDescending { it.startedAt }
     }
 
     suspend fun deleteRecord(record: FocusRecord) {
@@ -513,10 +810,9 @@ class TimberRepository(
                 id = row?.timerId ?: UUID.randomUUID().toString(),
                 mode = TimerMode.from(row?.mode),
                 title = RecordMapper.cleanTitle(row?.title),
-                // The table has no species column, so the tree is derived from
-                // the synced name. That lookup is deterministic and history is
-                // shared, so the other device resolves the same one.
-                speciesId = resolveSpeciesFor(row?.title).id,
+                // The project owns the species, so a timer started on another
+                // device grows the same tree here.
+                projectId = row?.projectId?.ifBlank { null } ?: Projects.DEFAULT_ID,
                 durationMinutes = row?.durationMinutes ?: 0,
                 durationSeconds = row?.durationSeconds ?: 0,
                 startedAt = startedAt,
@@ -529,22 +825,28 @@ class TimberRepository(
     suspend fun pushCloudTimer(timer: ActiveTimer): Boolean {
         val user = _session.value ?: return false
         val token = auth.validAccessToken() ?: return false
-        return runCatching {
-            api.upsertActiveTimer(
-                token,
-                ActiveTimerUpsert(
-                    userId = user.userId,
-                    timerId = timer.id,
-                    mode = timer.mode.wire,
-                    title = RecordMapper.cleanTitle(timer.title),
-                    durationMinutes = timer.durationMinutes,
-                    durationSeconds = timer.durationSeconds,
-                    startedAt = Time.toIso(timer.startedAt),
-                    endAt = Time.toIso(timer.endAt),
-                    updatedAt = Time.toIso(System.currentTimeMillis()),
-                ),
-            )
-        }.onFailure { logSync(it) }.isSuccess
+        val row = ActiveTimerUpsert(
+            userId = user.userId,
+            timerId = timer.id,
+            mode = timer.mode.wire,
+            title = RecordMapper.cleanTitle(timer.title),
+            projectId = timer.projectId,
+            durationMinutes = timer.durationMinutes,
+            durationSeconds = timer.durationSeconds,
+            startedAt = Time.toIso(timer.startedAt),
+            endAt = Time.toIso(timer.endAt),
+            updatedAt = Time.toIso(System.currentTimeMillis()),
+        )
+        return runCatching { api.upsertActiveTimer(token, row, !activeTimerProjectColumnMissing) }
+            .recoverCatching { error ->
+                // Older databases predate the column; the timer still syncs
+                // without it, just without carrying its project across.
+                if (activeTimerProjectColumnMissing) throw error
+                activeTimerProjectColumnMissing = true
+                api.upsertActiveTimer(token, row, withProject = false)
+            }
+            .onFailure { logSync(it) }
+            .isSuccess
     }
 
     /**
@@ -603,30 +905,7 @@ class TimberRepository(
         runCatching { api.deleteRestTimer(token, user.userId) }.onFailure { logSync(it) }
     }
 
-    // ---------- species ----------
-
-    /**
-     * The tree a session name should grow, in the web app's priority order:
-     * an explicit choice saved on this device, then the species of the most
-     * recent completed session with that name (which is synced, so it follows
-     * the account across devices), then a stable per-name default.
-     */
-    fun resolveSpeciesFor(name: String?): TreeSpecies {
-        val key = Seed.treeSeed(name)
-        TreeSpecies.byId(settings.treePreference(key))
-            ?.takeIf { it != TreeSpecies.WILTED }
-            ?.let { return it }
-
-        _records.value
-            .asSequence()
-            .filter { it.status == RecordStatus.COMPLETED && Seed.treeSeed(it.title) == key }
-            .sortedByDescending { it.startedAt }
-            .firstNotNullOfOrNull { TreeSpecies.byLabel(it.treeKind) }
-            ?.takeIf { it != TreeSpecies.WILTED }
-            ?.let { return it }
-
-        return Seed.defaultSpeciesFor(name)
-    }
+    // ---------- derived ----------
 
     /** Minutes focused today, rests excluded — the same sum the Records screen shows. */
     fun todayFocusMinutes(): Int {
@@ -636,9 +915,6 @@ class TimberRepository(
             .filter { Time.localDateKey(if (it.endedAt > 0) it.endedAt else it.startedAt) == today }
             .sumOf { it.actualMinutes }
     }
-
-    fun normalize(row: FocusSessionRow): FocusRecord =
-        RecordMapper.normalize(row) { settings.treePreference(Seed.treeSeed(it)) }
 
     private fun toNote(row: NoteRow) = Note(
         id = row.id,

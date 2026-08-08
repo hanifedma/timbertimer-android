@@ -153,7 +153,7 @@ class RealtimeClient(
                     if (joined && !wasConnected) onChange?.invoke()
                 }
 
-                // Any insert/update/delete on any of the four tables: reconcile.
+                // Any insert/update/delete on any of the five tables: reconcile.
                 "postgres_changes" -> onChange?.invoke()
 
                 "system" -> Unit
@@ -218,6 +218,7 @@ class RealtimeClient(
                             add(changeSpec(SupabaseConfig.ACTIVE_TIMERS_TABLE, filter))
                             add(changeSpec(SupabaseConfig.ACTIVE_RESTS_TABLE, filter))
                             add(changeSpec(SupabaseConfig.NOTES_TABLE, filter))
+                            add(changeSpec(SupabaseConfig.PROJECTS_TABLE, filter))
                         })
                     }
                     put("access_token", token)
