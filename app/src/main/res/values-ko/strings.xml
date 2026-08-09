@@ -125,6 +125,10 @@
     <string name="toast_project_builtin">기본 프로젝트는 삭제할 수 없어요.</string>
     <string name="toast_cloud_projects_fail">프로젝트 동기화에 실패했어요. 이 기기에 저장했어요.</string>
 
+    <string name="confirm_move_record_title">이 기록을 옮길까요?</string>
+    <string name="confirm_resize_record_title">시간을 바꿀까요?</string>
+    <string name="project_sync_blocked">프로젝트가 동기화되지 않아요. 데이터베이스에 최신 SQL을 실행하지 않아서, 이 기기에만 저장됩니다.</string>
+
     <!-- Time by project -->
     <string name="summary_kicker">프로젝트</string>
     <string name="summary_title">프로젝트별 시간</string>

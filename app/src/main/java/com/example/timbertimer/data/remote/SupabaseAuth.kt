@@ -236,11 +236,37 @@ class SupabaseAuth(
  *
  * [rejected] separates "the server said no" from "the request never arrived".
  * Only the former should ever discard a stored session.
+ *
+ * [code] is PostgREST's or Postgres's own error code, which is the only reliable
+ * way to tell "this database does not have that column" from "that request
+ * failed". Conflating the two is expensive: the first is permanent and worth
+ * remembering, the second is a tunnel.
  */
 class SupabaseException(
     message: String,
     val rejected: Boolean = false,
+    val code: String? = null,
 ) : Exception(message)
+
+/**
+ * True when the server said a table or a column does not exist — the one case
+ * where dropping a field from later requests is the right answer.
+ *
+ * Anything else, transport failures most of all, must leave the app willing to
+ * try the full request again: a single lost packet should not quietly downgrade
+ * every write for the rest of the session.
+ */
+fun Throwable.isMissingSchema(): Boolean {
+    val failure = this as? SupabaseException ?: return false
+    if (!failure.rejected) return false
+    // PGRST204/205: column or table absent from PostgREST's schema cache.
+    // 42703/42P01: Postgres's own undefined_column / undefined_table.
+    failure.code?.let { code ->
+        return code == "PGRST204" || code == "PGRST205" || code == "42703" || code == "42P01"
+    }
+    val text = message.orEmpty().lowercase()
+    return "schema cache" in text || "does not exist" in text || "could not find" in text
+}
 
 /**
  * The PKCE verifier was gone when the redirect came back — usually because app

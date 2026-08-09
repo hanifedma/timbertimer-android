@@ -98,6 +98,24 @@ data class ProjectEditor(
     val isBuiltIn: Boolean get() = id in Projects.BUILTIN_IDS
 }
 
+/**
+ * A calendar drag waiting to be confirmed.
+ *
+ * A block is easy to move without quite meaning to, and the times it lands on
+ * are not something you can read back off a grid precisely — so the change is
+ * described in words and only written once it has been agreed to, exactly as on
+ * the website.
+ */
+data class PendingMove(
+    val record: FocusRecord,
+    val startedAt: Long,
+    val minutes: Int,
+    /** True when an edge was dragged rather than the whole block. */
+    val resized: Boolean,
+) {
+    val endedAt: Long get() = startedAt + minutes * 60_000L
+}
+
 /** What the calendar is showing: how many days, how tall an hour, starting when. */
 data class CalendarState(
     val days: Int = SettingsStore.CALENDAR_DEFAULT_DAYS,
@@ -115,6 +133,7 @@ class TimberViewModel(
 
     val records = repository.records
     val projects = repository.projects
+    val projectsSyncBlocked = repository.projectsSyncBlocked
     val notes = repository.notes
     val dataMode = repository.dataMode
     val session = repository.session
@@ -150,6 +169,9 @@ class TimberViewModel(
 
     private val _projectEditor = MutableStateFlow<ProjectEditor?>(null)
     val projectEditor: StateFlow<ProjectEditor?> = _projectEditor.asStateFlow()
+
+    private val _pendingMove = MutableStateFlow<PendingMove?>(null)
+    val pendingMove: StateFlow<PendingMove?> = _pendingMove.asStateFlow()
 
     private val _messages = MutableSharedFlow<UiMessage>(extraBufferCapacity = 8)
     val messages: SharedFlow<UiMessage> = _messages
@@ -391,22 +413,36 @@ class TimberViewModel(
         Time.addDays(Time.startOfDay(System.currentTimeMillis()), -((days - 1) / 2).toLong())
 
     /**
-     * Commits a block dragged to a new time or resized on the calendar.
+     * Asks about a block dragged to a new time or resized on the calendar.
      *
      * The start lands on a whole minute: a record made by the timer starts at
      * some stray second, and carrying that through a drag makes the times read a
      * minute out from the grid line it was dropped on.
+     *
+     * Nothing is written here. A drag that changed nothing is dropped silently;
+     * anything else waits for [confirmMove], and until then the block on screen
+     * is still drawn from the record's unchanged times.
      */
-    fun moveRecord(record: FocusRecord, startedAt: Long, minutes: Int) {
+    fun proposeMove(record: FocusRecord, startedAt: Long, minutes: Int, resized: Boolean) {
         val start = (startedAt / 60_000L) * 60_000L
         val safeMinutes = minutes.coerceIn(1, Limits.MINUTES_MAX)
         if (record.startedAt == start && record.actualMinutes == safeMinutes) return
+        _pendingMove.value = PendingMove(record, start, safeMinutes, resized)
+    }
+
+    fun cancelMove() {
+        _pendingMove.value = null
+    }
+
+    fun confirmMove() {
+        val move = _pendingMove.value ?: return
+        _pendingMove.value = null
         viewModelScope.launch {
             repository.updateRecord(
-                record.copy(
-                    startedAt = start,
-                    endedAt = start + safeMinutes * 60_000L,
-                    actualMinutes = safeMinutes,
+                move.record.copy(
+                    startedAt = move.startedAt,
+                    endedAt = move.endedAt,
+                    actualMinutes = move.minutes,
                 )
             )
             _messages.emit(UiMessage.of(R.string.toast_record_saved))

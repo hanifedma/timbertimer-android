@@ -107,7 +107,7 @@ fun CalendarScreen(
     onZoom: (Float) -> Unit,
     onOpenRecord: (FocusRecord) -> Unit,
     onCreateRecord: (Long, Int) -> Unit,
-    onMoveRecord: (FocusRecord, Long, Int) -> Unit,
+    onMoveRecord: (FocusRecord, Long, Int, Boolean) -> Unit,
     onOpenTimer: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -287,6 +287,7 @@ fun CalendarScreen(
                                                 finished.record,
                                                 finished.start,
                                                 minutes.coerceAtLeast(1),
+                                                finished.mode != DragMode.MOVE,
                                             )
                                         }
                                     },
@@ -587,6 +588,24 @@ private fun CalendarBlock(
                 .clip(RoundedCornerShape(2.dp))
                 .background(if (segment.running) colors.base.copy(alpha = 0.6f) else colors.base)
         )
+
+        // The edges are only draggable once there is room for two grab zones and
+        // a body between them, so the handles appear exactly when they work —
+        // otherwise the block would be advertising something it cannot do.
+        if (segment.record != null && !segment.running && !segment.partial &&
+            heightDp >= EDGE_GRAB_MIN_HEIGHT
+        ) {
+            listOf(Alignment.TopCenter, Alignment.BottomCenter).forEach { edge ->
+                Box(
+                    modifier = Modifier
+                        .align(edge)
+                        .width(22.dp)
+                        .height(3.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(colors.base.copy(alpha = 0.55f))
+                )
+            }
+        }
 
         Column(modifier = Modifier.fillMaxSize()) {
             Text(

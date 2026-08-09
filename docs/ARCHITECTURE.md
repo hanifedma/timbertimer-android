@@ -96,6 +96,34 @@ scrolling the day, and the scroller above has to be free to take it. Stacking th
 stock detectors does not work either — `detectTapGestures` consumes the down
 event, which cancels the drag detector's long press.
 
+## A missing column and a missing network are not the same thing
+
+Three flags let the app keep working against a database that predates the
+projects migration: it drops `project_id` from its writes, and stops trying to
+sync projects at all. Each is set at most once per session.
+
+The rule that makes them safe is that **only the server saying so may set them**
+— `isMissingSchema()` insists on a rejection carrying PostgREST's `PGRST204` /
+`PGRST205` or Postgres's `42703` / `42P01`. Latching on any failure looks
+harmless and is not: one lost packet during the first save of a session would
+strip the project from every record written afterwards, and a project made on
+another device would never arrive, with nothing on screen to explain either.
+That is a data-loss bug wearing the clothes of a graceful degradation.
+
+When a flag does latch, `projectsSyncBlocked` says so on the Settings screen.
+A downgrade the user cannot see is a downgrade they cannot fix.
+
+## A calendar drag is read back before it is written
+
+`proposeMove` does not save. It parks a `PendingMove` that the shell renders as
+a dialog naming the record, its old span and its new one; only `confirmMove`
+writes. A drag that changed nothing is dropped without asking.
+
+Two reasons, both the website's. A block is easy to nudge without meaning to,
+and a grid cannot be read precisely enough to know what you just did to the
+minute. Nothing is mutated while the question is on screen, so declining needs
+no undo — the block is still drawn from the record's unchanged times.
+
 ## The timer does not count down
 
 `ActiveTimer` stores `endAt` — an instant — not a number of seconds remaining.
@@ -248,7 +276,7 @@ Two constraints that are easy to trip over:
 
 ## Testing
 
-`./gradlew testDebugUnitTest` — 49 tests, all off-device:
+`./gradlew testDebugUnitTest` — 55 tests, all off-device:
 
 - **`SeedParityTest`** — the hash, the species and colour a name picks, the tree
   palette a colour produces, the readable ink per theme, and the jitter, against
@@ -262,6 +290,8 @@ Two constraints that are easy to trip over:
 - **`CalendarLayoutTest`** — the day a record lands on, the split across
   midnight, the padding that keeps a one-minute record tappable, and the column
   packing (including a freed lane being reused rather than widening the run).
+- **`SchemaFallbackTest`** — which failures may convince the app that a column is
+  missing, and, more importantly, which may not.
 
 `core/` and `data/` are deliberately free of Android imports so this stays
 possible; `Seed.kt` and `Palette.kt` in particular have no Compose import, which

@@ -56,6 +56,7 @@ fun SettingsScreen(
     onIgnoreBatteryOptimisation: () -> Unit,
     onAddWidget: () -> Unit,
     onManageProjects: () -> Unit,
+    projectsSyncBlocked: Boolean,
     onSignIn: () -> Unit,
     onSignOut: () -> Unit,
     onDeleteAll: () -> Unit,
@@ -108,6 +109,16 @@ fun SettingsScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 8.dp),
             )
+            // Failing silently here is what makes a project made on the laptop
+            // look like it simply never arrived.
+            if (projectsSyncBlocked) {
+                Text(
+                    text = stringResource(R.string.project_sync_blocked),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+            }
         }
 
         Panel(kicker = stringResource(R.string.settings_appearance)) {

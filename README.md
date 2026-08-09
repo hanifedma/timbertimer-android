@@ -29,7 +29,7 @@ Everything the web app does, plus what only a phone can:
 |---|---|
 | **Countdown & stopwatch** | Finishing a countdown early records an abandoned session, exactly as on the web. |
 | **Projects** | Every record belongs to one, and the project owns its colour and its tree. Name a new project and both are picked for you; recolour it and its whole forest changes with it. |
-| **Calendar** | A day grid showing 1–7 days at once, zoomable by pinch. Tap empty space to add a record, hold a block to drag it to another time or another day, or grab its top or bottom edge to change when it started or ended. |
+| **Calendar** | A day grid showing 1–7 days at once, zoomable by pinch. Tap empty space to add a record, hold a block to drag it to another time or another day, or grab its top or bottom edge to change when it started or ended. A drag is read back to you before it is saved, so a block nudged by accident costs nothing. |
 | **Time by project** | A donut and a breakdown of where the day's, week's or month's hours actually went, in each project's colour. |
 | **Tasks remember their project** | Track "wash dishes" under Errands once and choosing that task picks Errands again by itself, on any device. |
 | **A tree per project** | Seven species, chosen by tapping the tree rather than reading a dropdown. Records are drawn with whatever their project grows now, so changing it re-plants the forest. |
@@ -174,7 +174,7 @@ there is width for it.
 ```bash
 ./gradlew assembleDebug      # app/build/outputs/apk/debug/
 ./gradlew assembleRelease    # signed, if keystore.properties is present
-./gradlew testDebugUnitTest  # 49 tests
+./gradlew testDebugUnitTest  # 55 tests
 ```
 
 `assembleRelease` signs the APK if a `keystore.properties` sits beside this file,

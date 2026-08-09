@@ -416,14 +416,15 @@ class SupabaseApi(
 
     private fun failureFor(response: Response, preRead: String? = null): SupabaseException {
         val body = preRead ?: runCatching { response.body?.string() }.getOrNull().orEmpty()
-        val parsed = runCatching {
-            json.decodeFromString(ApiError.serializer(), body).bestMessage()
-        }.getOrNull()
+        val error = runCatching { json.decodeFromString(ApiError.serializer(), body) }.getOrNull()
         return SupabaseException(
-            parsed ?: "Supabase request failed (HTTP ${response.code}).",
+            error?.bestMessage() ?: "Supabase request failed (HTTP ${response.code}).",
             // Anything the server answered at all is a rejection; only transport
             // failures throw IOException before reaching here.
             rejected = true,
+            // Carried through so the caller can tell a missing column from a
+            // refusal it should simply retry.
+            code = error?.code,
         )
     }
 

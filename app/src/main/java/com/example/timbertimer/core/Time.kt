@@ -136,6 +136,17 @@ object Time {
             .withZone(zone())
             .format(Instant.ofEpochMilli(millis))
 
+    /**
+     * "Sat, 8 Aug · 09:00 – 10:45" — one line naming a record's day and the
+     * stretch of it the record covers, for reading a change back before it is
+     * agreed to.
+     */
+    fun spanLabel(startMillis: Long, endMillis: Long, locale: Locale, is24Hour: Boolean): String {
+        val day = DateTimeFormatter.ofPattern("EEE, d MMM", locale).format(localDate(startMillis))
+        return "$day · ${timeShort(startMillis, locale, is24Hour)} – " +
+            timeShort(endMillis, locale, is24Hour)
+    }
+
     /** "Sat, 8 August" for one day, "Aug 8 – Aug 10" for a range of them. */
     fun calendarRangeLabel(startMillis: Long, days: Int, locale: Locale): String {
         val first = localDate(startMillis)

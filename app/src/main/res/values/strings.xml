@@ -128,6 +128,10 @@
     <string name="toast_project_builtin">Built-in projects cannot be deleted.</string>
     <string name="toast_cloud_projects_fail">Project sync failed. Saved on this device.</string>
 
+    <string name="confirm_move_record_title">Move this record?</string>
+    <string name="confirm_resize_record_title">Change its time?</string>
+    <string name="project_sync_blocked">Projects are not syncing: this database has not had the latest SQL run against it, so they stay on this device.</string>
+
     <!-- Time by project -->
     <string name="summary_kicker">Projects</string>
     <string name="summary_title">Time by project</string>

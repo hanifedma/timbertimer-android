@@ -57,7 +57,10 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.timbertimer.MainActivity
 import com.example.timbertimer.R
+import com.example.timbertimer.core.Time
 import com.example.timbertimer.data.model.FocusRecord
+import com.example.timbertimer.ui.components.currentLocale
+import com.example.timbertimer.ui.components.rememberClockFormat
 import com.example.timbertimer.ui.screens.CalendarScreen
 import com.example.timbertimer.ui.screens.FocusScreen
 import com.example.timbertimer.ui.screens.ForestScreen
@@ -132,6 +135,8 @@ fun TimberApp(
     val filter by viewModel.filter.collectAsStateWithLifecycle()
     val editor by viewModel.editor.collectAsStateWithLifecycle()
     val projectEditor by viewModel.projectEditor.collectAsStateWithLifecycle()
+    val pendingMove by viewModel.pendingMove.collectAsStateWithLifecycle()
+    val projectsSyncBlocked by viewModel.projectsSyncBlocked.collectAsStateWithLifecycle()
     val session by viewModel.session.collectAsStateWithLifecycle()
     val dataMode by viewModel.dataMode.collectAsStateWithLifecycle()
 
@@ -296,7 +301,7 @@ fun TimberApp(
                             onCreateRecord = { startedAt, minutes ->
                                 viewModel.openEditor(null, startedAt = startedAt, minutes = minutes)
                             },
-                            onMoveRecord = viewModel::moveRecord,
+                            onMoveRecord = viewModel::proposeMove,
                             onOpenTimer = { destination = Destination.FOCUS },
                         )
 
@@ -357,6 +362,7 @@ fun TimberApp(
                                 onIgnoreBatteryOptimisation = onIgnoreBatteryOptimisation,
                                 onAddWidget = onAddWidget,
                                 onManageProjects = { managingProjects = true },
+                                projectsSyncBlocked = projectsSyncBlocked,
                                 onSignIn = onSignIn,
                                 onSignOut = viewModel::signOut,
                                 onDeleteAll = { confirmDeleteAll = true },
@@ -409,6 +415,64 @@ fun TimberApp(
             onDelete = { current.id?.let(viewModel::deleteProject) },
             onDismiss = viewModel::closeProjectEditor,
             recordCount = current.id?.let(viewModel::recordCountFor) ?: 0,
+        )
+    }
+
+    pendingMove?.let { move ->
+        val locale = currentLocale()
+        val clock = rememberClockFormat()
+        val book = projects
+        AlertDialog(
+            onDismissRequest = viewModel::cancelMove,
+            title = {
+                Text(
+                    stringResource(
+                        if (move.resized) R.string.confirm_resize_record_title
+                        else R.string.confirm_move_record_title
+                    )
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = move.record.title,
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    com.example.timbertimer.ui.components.ProjectChip(book[move.record.projectId])
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = Time.spanLabel(
+                            move.record.startedAt,
+                            maxOf(move.record.endedAt, move.record.startedAt),
+                            locale,
+                            clock.is24Hour,
+                        ),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        text = "→  " + Time.spanLabel(
+                            move.startedAt,
+                            move.endedAt,
+                            locale,
+                            clock.is24Hour,
+                        ),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = viewModel::confirmMove) {
+                    Text(stringResource(R.string.btn_save))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = viewModel::cancelMove) {
+                    Text(stringResource(R.string.btn_cancel))
+                }
+            },
         )
     }
 

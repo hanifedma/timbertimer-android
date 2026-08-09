@@ -25,6 +25,7 @@ import com.example.timbertimer.data.remote.Session
 import com.example.timbertimer.data.remote.SessionProjectUpdate
 import com.example.timbertimer.data.remote.SupabaseApi
 import com.example.timbertimer.data.remote.SupabaseAuth
+import com.example.timbertimer.data.remote.isMissingSchema
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -75,16 +76,37 @@ class TimberRepository(
     private var cloudReachable = true
 
     /**
-     * Set once this database is found to predate the projects migration.
+     * Set once this database is found to genuinely predate the projects
+     * migration — that is, once the server has said the table or the column is
+     * not there.
      *
-     * The app keeps working either way — projects simply stay on the device and
-     * records fall back to being grouped by their title — so this is a quiet
-     * downgrade rather than an error. Re-running `docs/supabase-schema.sql` on
-     * the Supabase project is what turns it back on.
+     * Never set for a request that simply failed. That distinction is the whole
+     * point: latching on a lost packet would silently strip `project_id` from
+     * every later write, and stop projects syncing at all, for the rest of the
+     * session — with nothing on screen to say why.
+     *
+     * The app keeps working either way, so this is a quiet downgrade rather than
+     * an error. Re-running `docs/supabase-schema.sql` turns it back on.
      */
     private var projectsTableMissing = false
     private var sessionProjectColumnMissing = false
     private var activeTimerProjectColumnMissing = false
+
+    private val _projectsSyncBlocked = MutableStateFlow(false)
+
+    /**
+     * True when this account's projects cannot reach the cloud because the
+     * database has not had the projects migration run against it.
+     *
+     * Surfaced so the app can say so, rather than leaving the user to wonder why
+     * a project made on the laptop never arrives.
+     */
+    val projectsSyncBlocked: StateFlow<Boolean> = _projectsSyncBlocked.asStateFlow()
+
+    private fun markProjectsTableMissing() {
+        projectsTableMissing = true
+        _projectsSyncBlocked.value = _session.value != null
+    }
 
     /** Serialises whole-list note writes so two quick taps cannot interleave. */
     private val notesLock = Mutex()
@@ -116,6 +138,7 @@ class TimberRepository(
                     projectsTableMissing = false
                     sessionProjectColumnMissing = false
                     activeTimerProjectColumnMissing = false
+                    _projectsSyncBlocked.value = false
                     refresh()
                 }
             }
@@ -202,8 +225,8 @@ class TimberRepository(
         if (pending.isEmpty()) return
         val rows = pending.map { RecordMapper.toInsert(it, userId) }
         val sent = runCatching { api.upsertSessions(token, rows, !sessionProjectColumnMissing) }
-            .recoverCatching {
-                if (sessionProjectColumnMissing) throw it
+            .recoverCatching { error ->
+                if (sessionProjectColumnMissing || !error.isMissingSchema()) throw error
                 sessionProjectColumnMissing = true
                 api.upsertSessions(token, rows, withProject = false)
             }
@@ -306,9 +329,10 @@ class TimberRepository(
                 _projects.value = ProjectBook(rows.map(RecordMapper::toProject))
             }
             .onFailure { error ->
-                // The table only exists once the updated SQL has been run; until
-                // then this device's own projects carry on working.
-                projectsTableMissing = true
+                // The table only exists once the updated SQL has been run. Only
+                // the server actually saying so counts — a failed request is
+                // just a failed request, and the next one should try again.
+                if (error.isMissingSchema()) markProjectsTableMissing()
                 logSync(error)
                 if (cached.isEmpty()) {
                     _projects.value = ProjectBook(local.readProjects().map(RecordMapper::toProject))
@@ -455,9 +479,9 @@ class TimberRepository(
                 affected.map { it.id },
                 SessionProjectUpdate(projectId = target, updatedAt = Time.toIso(now)),
             )
-        }.onFailure {
-            sessionProjectColumnMissing = true
-            logSync(it)
+        }.onFailure { error ->
+            if (error.isMissingSchema()) sessionProjectColumnMissing = true
+            logSync(error)
         }
         local.writeCloudCache(user.userId, _records.value.map { RecordMapper.toRow(it, user.userId) })
     }
@@ -474,9 +498,9 @@ class TimberRepository(
         val token = auth.validAccessToken() ?: return
         runCatching {
             api.upsertProjects(token, projects.map { RecordMapper.toProjectUpsert(it, user.userId) })
-        }.onFailure {
-            projectsTableMissing = true
-            logSync(it)
+        }.onFailure { error ->
+            if (error.isMissingSchema()) markProjectsTableMissing()
+            logSync(error)
             _messages.tryEmit(UiMessage.of(R.string.toast_cloud_projects_fail))
         }
     }
@@ -538,9 +562,10 @@ class TimberRepository(
             val insert = RecordMapper.toInsert(record, user.userId)
             val result = runCatching { api.insertSession(token, insert, !sessionProjectColumnMissing) }
                 .recoverCatching { error ->
-                    // Most likely this database predates the projects migration;
-                    // retry without the column rather than lose the session.
-                    if (sessionProjectColumnMissing) throw error
+                    // Only retry stripped-down when the server said the column is
+                    // not there. Doing it for any failure would quietly drop the
+                    // project from every record saved afterwards.
+                    if (sessionProjectColumnMissing || !error.isMissingSchema()) throw error
                     sessionProjectColumnMissing = true
                     api.insertSession(token, insert, withProject = false)
                 }
@@ -582,7 +607,7 @@ class TimberRepository(
                 api.updateSession(token, user.userId, updated.id, payload, !sessionProjectColumnMissing)
             }
                 .recoverCatching { error ->
-                    if (sessionProjectColumnMissing) throw error
+                    if (sessionProjectColumnMissing || !error.isMissingSchema()) throw error
                     sessionProjectColumnMissing = true
                     api.updateSession(token, user.userId, updated.id, payload, withProject = false)
                 }
@@ -841,7 +866,7 @@ class TimberRepository(
             .recoverCatching { error ->
                 // Older databases predate the column; the timer still syncs
                 // without it, just without carrying its project across.
-                if (activeTimerProjectColumnMissing) throw error
+                if (activeTimerProjectColumnMissing || !error.isMissingSchema()) throw error
                 activeTimerProjectColumnMissing = true
                 api.upsertActiveTimer(token, row, withProject = false)
             }
