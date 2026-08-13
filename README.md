@@ -160,6 +160,29 @@ opens Android's own exemption dialog. Be aware that no app can truly be immune:
 several manufacturers stop background work regardless of what that dialog says,
 and that is a decision made below the app.
 
+### A clock you can read from across the desk
+
+The platform files a notification's elapsed time next to the timestamp, in the
+header, at header size — sensible for a chat message, wrong for a focus timer
+where the clock *is* the content. That text cannot be resized, so the running
+notification replaces the content area with its own: the time large and in the
+app's green, the task above it, the goal below, and the progress bar under that.
+
+`DecoratedCustomViewStyle` is what keeps this from being a step backwards. The
+platform still draws the header, the app name, the expander and the action
+buttons, so Finish and Give up look and behave exactly as they always did, and
+only the middle is ours — rather than a fully custom notification that would have
+had to reimplement all of it, badly, and differently on every OEM skin.
+
+The clock still ticks by itself. A RemoteViews `Chronometer` counts from
+`SystemClock.elapsedRealtime()` rather than the wall clock, so the target instant
+is converted into that frame each time the notification is built — no drift
+accumulates, and because elapsedRealtime includes time the device spent asleep, a
+phone dozing in a pocket for an hour wakes with the clock still right.
+
+The stopwatch and the rest timer use the same layout with the progress bar
+hidden, because neither has a goal for a bar to measure.
+
 ### The clock that runs when nothing else does
 
 With no timer and no stopwatch going, the notification counts *up* from the end

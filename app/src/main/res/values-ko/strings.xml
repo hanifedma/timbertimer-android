@@ -226,6 +226,7 @@
     <string name="notif_channel_done_desc">집중 세션이 끝나는 순간 알려줘요.</string>
     <string name="notif_focus_countdown">집중 — %1$s 남음</string>
     <string name="notif_focus_stopwatch">집중 — 진행 중</string>
+    <string name="notif_focus_goal">목표 %1$s</string>
     <string name="notif_rest_title">휴식</string>
     <string name="notif_rest_text">휴식 중</string>
     <string name="notif_action_finish">완료</string>
@@ -241,8 +242,6 @@
     <string name="settings_dnd_desc">휴대폰이 무음일 때도 세션이 끝나면 소리가 나게 해요. 집중 중일 때가 바로 그런 순간이니까요. 이 권한은 Android 설정 화면에서만 켤 수 있어요.</string>
     <string name="settings_dnd_already">이미 방해 금지 모드에서도 알림이 허용되어 있어요.</string>
     <string name="settings_dnd_unsupported">이 휴대폰에는 방해 금지 액세스 화면이 없어요.</string>
-    <string name="notif_sync_title">변경 사항 확인 중</string>
-    <string name="notif_sync_text">이 기기에서 목록과 기록을 최신으로 유지해요.</string>
     <string name="notif_sync_subtext">동기화 중</string>
 
     <!-- Widget -->

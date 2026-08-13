@@ -9,6 +9,9 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import android.os.SystemClock
+import android.view.View
+import android.widget.RemoteViews
 import androidx.annotation.RequiresApi
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -158,34 +161,54 @@ class TimerNotifications(context: Context) {
             .setRequestPromotedOngoing(true)
 
         if (timer != null) {
-            builder.setContentTitle(timer.title)
-            if (timer.mode == TimerMode.COUNTDOWN) {
-                builder
-                    // `when` is the instant to count toward; the platform draws
-                    // the countdown from it, live, with no further posts.
-                    .setWhen(timer.endAt)
-                    .setUsesChronometer(true)
-                    .setChronometerCountDown(true)
-                    .setContentText(
+            val countdown = timer.mode == TimerMode.COUNTDOWN
+            val state = if (countdown) {
+                context.getString(
+                    R.string.notif_focus_goal,
+                    Time.formatMinutes(
+                        timer.durationMinutes,
+                        context.getString(R.string.unit_m),
+                        context.getString(R.string.unit_h),
+                    ),
+                )
+            } else {
+                context.getString(R.string.notif_focus_stopwatch)
+            }
+
+            builder
+                // Kept alongside the custom views, never instead of them: this is
+                // what a car dashboard, a watch, or a lock screen that declines to
+                // inflate someone else's layout falls back to reading.
+                .setContentTitle(timer.title)
+                .setContentText(
+                    if (countdown) {
                         context.getString(
                             R.string.notif_focus_countdown,
                             Time.formatClock(timer.remainingSeconds()),
                         )
-                    )
-                    .setProgress(1000, (timer.progress() * 1000).toInt(), false)
-            } else {
-                builder
-                    .setWhen(timer.startedAt)
-                    .setUsesChronometer(true)
-                    .setChronometerCountDown(false)
-                    .setContentText(context.getString(R.string.notif_focus_stopwatch))
-            }
+                    } else {
+                        state
+                    }
+                )
+                .setWhen(if (countdown) timer.endAt else timer.startedAt)
+                .setUsesChronometer(true)
+                .setChronometerCountDown(countdown)
+
+            builder.applyBigClock(
+                title = timer.title,
+                state = state,
+                // The instant to count toward, or the one to count up from.
+                target = if (countdown) timer.endAt else timer.startedAt,
+                countDown = countdown,
+                progress = if (countdown) timer.progress() else null,
+            )
+
             builder.addAction(
                 0,
                 context.getString(R.string.notif_action_finish),
                 serviceAction(TimerService.ACTION_FINISH),
             )
-            if (timer.mode == TimerMode.COUNTDOWN) {
+            if (countdown) {
                 builder.addAction(
                     0,
                     context.getString(R.string.notif_action_give_up),
@@ -199,11 +222,20 @@ class TimerNotifications(context: Context) {
                 .setWhen(rest.startedAt)
                 .setUsesChronometer(true)
                 .setChronometerCountDown(false)
-                .addAction(
-                    0,
-                    context.getString(R.string.notif_action_finish),
-                    serviceAction(TimerService.ACTION_FINISH_REST),
-                )
+
+            builder.applyBigClock(
+                title = context.getString(R.string.notif_rest_title),
+                state = context.getString(R.string.notif_rest_text),
+                target = rest.startedAt,
+                countDown = false,
+                progress = null,
+            )
+
+            builder.addAction(
+                0,
+                context.getString(R.string.notif_action_finish),
+                serviceAction(TimerService.ACTION_FINISH_REST),
+            )
         } else {
             // Nothing is running, but the service is. Rather than spend the most
             // frequently seen notification in the app on the word "syncing", it
@@ -214,6 +246,58 @@ class TimerNotifications(context: Context) {
         }
 
         return builder.build()
+    }
+
+    /**
+     * Swaps the notification's content area for one that shows the time at a
+     * size worth reading.
+     *
+     * The platform template files the elapsed time with the timestamp, in the
+     * header, at header size — reasonable for a chat message and wrong for a
+     * focus timer, where the clock is the entire content. There is no way to
+     * resize that text, so the content area is replaced outright.
+     *
+     * [NotificationCompat.DecoratedCustomViewStyle] is what keeps this from
+     * being a step backwards: the platform still draws the header, the app name,
+     * the expander and the action buttons, so Finish and Give up look and behave
+     * exactly as they did, and only the middle is ours. A fully custom
+     * notification would have had to reimplement all of it, badly, and differently
+     * on every OEM skin.
+     *
+     * The clock still ticks by itself. A RemoteViews Chronometer counts from
+     * [android.os.SystemClock.elapsedRealtime], not the wall clock, so the
+     * target instant is converted into that frame here. elapsedRealtime includes
+     * time the device spent asleep, which is the property that matters: a phone
+     * dozing in a pocket for an hour wakes with the clock still right.
+     */
+    private fun NotificationCompat.Builder.applyBigClock(
+        title: String,
+        state: String,
+        target: Long,
+        countDown: Boolean,
+        progress: Float?,
+    ) {
+        // Converted at build time rather than stored: every repost recomputes it
+        // against the clock as it is now, so drift cannot accumulate.
+        val base = SystemClock.elapsedRealtime() + (target - System.currentTimeMillis())
+
+        fun views(layout: Int, withState: Boolean) = RemoteViews(context.packageName, layout).apply {
+            setTextViewText(R.id.notification_title, title)
+            if (withState) setTextViewText(R.id.notification_state, state)
+            setChronometer(R.id.notification_time, base, null, true)
+            setChronometerCountDown(R.id.notification_time, countDown)
+            if (progress == null) {
+                // A stopwatch has no goal, so a bar would be measuring nothing.
+                setViewVisibility(R.id.notification_progress, View.GONE)
+            } else {
+                setViewVisibility(R.id.notification_progress, View.VISIBLE)
+                setProgressBar(R.id.notification_progress, 1000, (progress * 1000).toInt(), false)
+            }
+        }
+
+        setStyle(NotificationCompat.DecoratedCustomViewStyle())
+        setCustomContentView(views(R.layout.notification_timer, withState = false))
+        setCustomBigContentView(views(R.layout.notification_timer_big, withState = true))
     }
 
     /**

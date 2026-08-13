@@ -227,9 +227,9 @@
     <string name="notif_channel_running_desc">Shows the focus countdown or stopwatch while it runs.</string>
     <string name="notif_channel_done">Finished sessions</string>
     <string name="notif_channel_done_desc">Alerts you the moment a focus session finishes.</string>
-    <string name="notif_focus_title">%1$s</string>
     <string name="notif_focus_countdown">Focus — %1$s left</string>
     <string name="notif_focus_stopwatch">Focus — running</string>
+    <string name="notif_focus_goal">%1$s goal</string>
     <string name="notif_rest_title">Rest</string>
     <string name="notif_rest_text">Resting</string>
     <string name="notif_action_finish">Finish</string>
@@ -245,8 +245,6 @@
     <string name="settings_dnd_desc">Lets a finished session still chime while the phone is silenced — which is exactly when you are most likely to be focusing. Android only grants this from its own settings screen.</string>
     <string name="settings_dnd_already">Alerts are already allowed through Do Not Disturb.</string>
     <string name="settings_dnd_unsupported">This phone has no Do Not Disturb access screen.</string>
-    <string name="notif_sync_title">Watching for changes</string>
-    <string name="notif_sync_text">Your list and records stay current on this device.</string>
     <string name="notif_sync_subtext">Syncing</string>
 
     <!-- Widget -->

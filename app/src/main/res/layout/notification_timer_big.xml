@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The expanded running-timer notification.
+
+  Same parts as the collapsed row, given the room the expanded slot actually
+  has: the clock at a size you can read without picking the phone up, the task
+  it belongs to above it, and what the session is aiming at underneath. The
+  Finish and Give up buttons are drawn by the platform below all this, which is
+  what DecoratedCustomViewStyle buys and why nothing here has to draw them.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical">
+
+    <TextView
+        android:id="@+id/notification_title"
+        style="@style/TextAppearance.Compat.Notification.Title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:ellipsize="end"
+        android:maxLines="1" />
+
+    <Chronometer
+        android:id="@+id/notification_time"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:includeFontPadding="false"
+        android:textAppearance="@style/TextAppearance.Compat.Notification.Title"
+        android:textColor="@color/timber_accent"
+        android:textSize="34sp"
+        android:textStyle="bold"
+        android:fontFeatureSettings="tnum" />
+
+    <TextView
+        android:id="@+id/notification_state"
+        style="@style/TextAppearance.Compat.Notification.Info"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:ellipsize="end"
+        android:maxLines="1" />
+
+    <ProgressBar
+        android:id="@+id/notification_progress"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:max="1000"
+        android:progressTint="@color/timber_accent" />
+</LinearLayout>
