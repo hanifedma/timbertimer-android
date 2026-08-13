@@ -247,6 +247,7 @@
     <string name="settings_dnd_unsupported">This phone has no Do Not Disturb access screen.</string>
     <string name="notif_sync_title">Watching for changes</string>
     <string name="notif_sync_text">Your list and records stay current on this device.</string>
+    <string name="notif_sync_subtext">Syncing</string>
 
     <!-- Widget -->
     <string name="widget_pin">Add the To-Do widget to your home screen</string>
@@ -259,9 +260,15 @@
     <string name="notif_channel_idle">Reminders</string>
     <string name="notif_channel_idle_desc">A quiet nudge to start a session when nothing is growing.</string>
     <string name="notif_idle_title">Your forest is waiting 🌱</string>
-    <string name="notif_idle_empty">Nothing is growing right now. Start a session and plant a tree.</string>
+    <string name="notif_idle_since">%1$s since your last session</string>
+    <string name="notif_idle_never">Nothing planted yet — your first tree is one tap away.</string>
+    <string name="notif_idle_none_today">Nothing grown today yet. Even a short session counts.</string>
     <string name="notif_idle_progress">%1$s focused today. Ready to plant another tree?</string>
     <string name="notif_idle_action">Start focusing</string>
+    <plurals name="notif_idle_days">
+        <item quantity="one">%1$d day</item>
+        <item quantity="other">%1$d days</item>
+    </plurals>
     <string name="settings_idle_reminder">Remind me when nothing is running</string>
     <string name="notif_permission_rationale">Allow notifications so the running timer stays visible and tells you when it finishes.</string>
     <string name="notif_permission_allow">Allow</string>

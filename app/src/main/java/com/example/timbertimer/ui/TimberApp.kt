@@ -153,6 +153,7 @@ fun TimberApp(
     LaunchedEffect(requestedDestination) {
         when (requestedDestination) {
             MainActivity.DESTINATION_TASKS -> destination = Destination.TASKS
+            MainActivity.DESTINATION_FOCUS -> destination = Destination.FOCUS
             else -> return@LaunchedEffect
         }
         viewModel.consumeDestination()

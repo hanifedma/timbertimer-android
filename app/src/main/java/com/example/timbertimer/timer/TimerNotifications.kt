@@ -122,8 +122,18 @@ class TimerNotifications(context: Context) {
         return moved
     }
 
+    /**
+     * What to say when nothing is running: when the forest last grew, and how
+     * much of it grew today.
+     *
+     * [lastEndedAt] is null for someone who has never finished a session, which
+     * needs different words — "0m since your last session" would be a strange
+     * thing to tell a person on their first day.
+     */
+    data class IdleSummary(val lastEndedAt: Long?, val todayMinutes: Int)
+
     /** The ongoing notification. Focus takes precedence when both are running. */
-    fun buildOngoing(timer: ActiveTimer?, rest: RestTimer?): Notification {
+    fun buildOngoing(timer: ActiveTimer?, rest: RestTimer?, idle: IdleSummary?): Notification {
         val builder = NotificationCompat.Builder(context, runningChannel)
             .setSmallIcon(R.drawable.ic_stat_tree)
             .setColor(ContextCompat.getColor(context, R.color.timber_accent))
@@ -195,17 +205,110 @@ class TimerNotifications(context: Context) {
                     serviceAction(TimerService.ACTION_FINISH_REST),
                 )
         } else {
-            // Nothing is running, but the service is: this is the background-sync
-            // state. It says what the app is actually doing rather than a bare
-            // app name, since it is the notification the user will see most.
-            builder
-                .setContentTitle(context.getString(R.string.notif_sync_title))
-                .setContentText(context.getString(R.string.notif_sync_text))
-                .setShowWhen(false)
-                .setUsesChronometer(false)
+            // Nothing is running, but the service is. Rather than spend the most
+            // frequently seen notification in the app on the word "syncing", it
+            // counts up from the last session — the same chronometer the running
+            // timer uses, pointed the other way.
+            builder.setSubText(context.getString(R.string.notif_sync_subtext))
+            applyIdleContent(builder, idle ?: IdleSummary(null, 0), worded = true)
         }
 
         return builder.build()
+    }
+
+    /**
+     * The "nothing is growing" face, shared by the ongoing notification and the
+     * standalone nudge so the two never disagree about how long it has been.
+     *
+     * The elapsed time is drawn by the platform's chronometer rather than
+     * written into the text, which is the whole trick: it counts up on its own
+     * from an instant handed to it once, so it stays exact for days with the app
+     * asleep and the process gone. Nothing here is recorded — it is a clock on
+     * the wall, not a session.
+     *
+     * [worded] adds the same figure to the body in plain language. Only the
+     * caller that can repost — the running service — should ask for it, because
+     * a sentence saying "20m" beside a chronometer reading 4:31:07 is worse than
+     * no sentence at all.
+     */
+    private fun applyIdleContent(
+        builder: NotificationCompat.Builder,
+        idle: IdleSummary,
+        worded: Boolean,
+    ) {
+        val since = idle.lastEndedAt
+        val elapsed = if (since != null) System.currentTimeMillis() - since else -1L
+
+        val today = if (idle.todayMinutes > 0) {
+            context.getString(
+                R.string.notif_idle_progress,
+                Time.formatMinutes(
+                    idle.todayMinutes,
+                    context.getString(R.string.unit_m),
+                    context.getString(R.string.unit_h),
+                ),
+            )
+        } else {
+            context.getString(R.string.notif_idle_none_today)
+        }
+
+        val never = since == null || elapsed < 0
+        val sinceLine = if (never) {
+            context.getString(R.string.notif_idle_never)
+        } else {
+            context.getString(R.string.notif_idle_since, gapLabel(elapsed))
+        }
+
+        // Unworded, the chronometer is already saying how long it has been, so
+        // the body is spent on today's total instead — except on day one, when
+        // there is no total and no clock, and the invitation is all there is.
+        val body = if (worded) sinceLine else if (never) sinceLine else today
+
+        builder
+            .setContentTitle(context.getString(R.string.notif_idle_title))
+            .setContentText(body)
+            .setStyle(
+                NotificationCompat.BigTextStyle()
+                    .bigText(if (worded && !never) "$sinceLine\n$today" else body)
+            )
+            .addAction(
+                0,
+                context.getString(R.string.notif_idle_action),
+                openApp(MainActivity.DESTINATION_FOCUS),
+            )
+
+        when {
+            // Under a day, the seconds still mean something: let it tick.
+            since != null && elapsed in 0 until DAY_MS ->
+                builder.setWhen(since).setShowWhen(true)
+                    .setUsesChronometer(true)
+                    .setChronometerCountDown(false)
+
+            // Past a day a ticking clock reads as a scolding, and "74:12:31"
+            // tells nobody anything. The date of the last session does.
+            since != null && elapsed >= DAY_MS ->
+                builder.setWhen(since).setShowWhen(true).setUsesChronometer(false)
+
+            else -> builder.setShowWhen(false).setUsesChronometer(false)
+        }
+    }
+
+    /**
+     * "45m", "2h 15m", "3 days" — how long the forest has been still.
+     *
+     * The wording coarsens as the gap grows, because "74h 12m" is a number
+     * nobody can feel, and precision stops being kind somewhere around bedtime.
+     */
+    private fun gapLabel(elapsedMs: Long): String {
+        val days = (elapsedMs / DAY_MS).toInt()
+        if (days >= 1) {
+            return context.resources.getQuantityString(R.plurals.notif_idle_days, days, days)
+        }
+        return Time.formatMinutes(
+            (elapsedMs / 60_000L).toInt(),
+            context.getString(R.string.unit_m),
+            context.getString(R.string.unit_h),
+        )
     }
 
     /** Fired when a session finishes, so it is noticed from the lock screen. */
@@ -263,46 +366,33 @@ class TimerNotifications(context: Context) {
     }
 
     /**
-     * The nudge shown while nothing is running.
+     * The nudge shown while nothing is running and background sync is off.
      *
      * Deliberately low importance and silent: it is an invitation sitting in the
-     * shade, not an alarm. It names what has already been done today, because
-     * that reads as encouragement rather than nagging.
+     * shade, not an alarm. It carries the same count-up clock as the ongoing
+     * notification, but not the same sentence — with sync off there is no
+     * service to repost it, so only the self-updating chronometer can be trusted
+     * to still be true tomorrow morning.
      */
-    fun showIdle(todayMinutes: Int) {
+    fun showIdle(idle: IdleSummary) {
         if (!canPost()) return
 
-        val text = if (todayMinutes <= 0) {
-            context.getString(R.string.notif_idle_empty)
-        } else {
-            context.getString(
-                R.string.notif_idle_progress,
-                Time.formatMinutes(
-                    todayMinutes,
-                    context.getString(R.string.unit_m),
-                    context.getString(R.string.unit_h),
-                ),
-            )
-        }
-
-        val notification = NotificationCompat.Builder(context, idleChannel)
+        val builder = NotificationCompat.Builder(context, idleChannel)
             .setSmallIcon(R.drawable.ic_stat_tree)
             .setColor(ContextCompat.getColor(context, R.color.timber_accent))
-            .setContentTitle(context.getString(R.string.notif_idle_title))
-            .setContentText(text)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
             .setContentIntent(openApp())
             .setAutoCancel(true)
             .setSilent(true)
+            .setOnlyAlertOnce(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             // Swiping it away does not switch the reminder off — the switch in
             // Settings does. Until then the app's state stays on show.
             .setDeleteIntent(restoreIntent(WHICH_IDLE))
-            .addAction(0, context.getString(R.string.notif_idle_action), openApp())
-            .build()
 
-        runCatching { manager.notify(ID_IDLE, notification) }
+        applyIdleContent(builder, idle, worded = false)
+
+        runCatching { manager.notify(ID_IDLE, builder.build()) }
     }
 
     fun cancelIdle() {
@@ -314,9 +404,9 @@ class TimerNotifications(context: Context) {
         runCatching { manager.cancel(ID_DONE) }
     }
 
-    fun update(timer: ActiveTimer?, rest: RestTimer?) {
+    fun update(timer: ActiveTimer?, rest: RestTimer?, idle: IdleSummary?) {
         if (!canPost()) return
-        runCatching { manager.notify(ID_RUNNING, buildOngoing(timer, rest)) }
+        runCatching { manager.notify(ID_RUNNING, buildOngoing(timer, rest, idle)) }
     }
 
     fun cancelOngoing() {
@@ -350,10 +440,16 @@ class TimerNotifications(context: Context) {
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
             PackageManager.PERMISSION_GRANTED
 
-    private fun openApp(): PendingIntent {
+    /**
+     * [destination] names a screen to land on. Extras are not part of a
+     * PendingIntent's identity, so each destination needs its own request code
+     * or FLAG_UPDATE_CURRENT would quietly rewrite the other one's target.
+     */
+    private fun openApp(destination: String? = null): PendingIntent {
         val intent = Intent(context, MainActivity::class.java)
             .setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-        return PendingIntent.getActivity(context, 0, intent, IMMUTABLE)
+        if (destination != null) intent.putExtra(MainActivity.EXTRA_DESTINATION, destination)
+        return PendingIntent.getActivity(context, destination?.hashCode() ?: 0, intent, IMMUTABLE)
     }
 
     private fun serviceAction(action: String): PendingIntent {
@@ -458,6 +554,9 @@ class TimerNotifications(context: Context) {
         const val WHICH_ONGOING = 1
         const val WHICH_DONE = 2
         const val WHICH_IDLE = 3
+
+        /** Where a ticking clock stops being encouragement and starts nagging. */
+        private const val DAY_MS = 24 * 60 * 60 * 1000L
 
         private const val PREFS = "timber-notifications"
         private const val KEY_DND_CHANNELS = "dnd-channels"

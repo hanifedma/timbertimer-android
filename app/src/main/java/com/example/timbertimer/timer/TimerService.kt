@@ -158,9 +158,11 @@ class TimerService : Service() {
      */
     private fun refreshNotification(idle: Boolean) {
         val now = System.currentTimeMillis()
-        // The idle notification says nothing that changes second to second, so
-        // it is posted once on the transition rather than on every tick.
-        var due = if (idle) !postedIdle else now - lastPostedAt >= REPOST_INTERVAL_MS
+        // Idle, the seconds are drawn by the platform's own chronometer, so the
+        // only thing a repost buys is the sentence beside it rolling over from
+        // "2h 15m" to "2h 16m" — worth a minute, not worth five seconds.
+        val interval = if (idle) IDLE_REPOST_INTERVAL_MS else REPOST_INTERVAL_MS
+        var due = if (idle && !postedIdle) true else now - lastPostedAt >= interval
 
         // Neither schedule notices a notification that was removed without the
         // app being told — the idle one least of all, since it is posted once
@@ -177,6 +179,7 @@ class TimerService : Service() {
         container.notifications.update(
             container.timerEngine.timer.value,
             container.timerEngine.rest.value,
+            container.timerEngine.idleSummary(),
         )
     }
 
@@ -184,6 +187,7 @@ class TimerService : Service() {
         val notification = container.notifications.buildOngoing(
             container.timerEngine.timer.value,
             container.timerEngine.rest.value,
+            container.timerEngine.idleSummary(),
         )
         lastPostedAt = System.currentTimeMillis()
         postedIdle = container.timerEngine.timer.value == null &&
@@ -213,6 +217,9 @@ class TimerService : Service() {
 
         /** Fast enough that the progress bar tracks, slow enough to be free. */
         private const val REPOST_INTERVAL_MS = 5_000L
+
+        /** Only the minute figure moves while nothing is running. */
+        private const val IDLE_REPOST_INTERVAL_MS = 60_000L
 
         /** How often to ask the system whether the notification is still there. */
         private const val VERIFY_INTERVAL_MS = 20_000L

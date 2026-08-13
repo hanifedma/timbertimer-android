@@ -933,6 +933,29 @@ class TimberRepository(
     // ---------- derived ----------
 
     /** Minutes focused today, rests excluded — the same sum the Records screen shows. */
+    /**
+     * When the user last stopped working, or null if they never have.
+     *
+     * Rests do not count: the question this answers is how long the forest has
+     * been still, and a rest is the stillness, not the growth. Abandoned
+     * sessions do count — sitting down and giving up is still the last time
+     * something was attempted, and pretending otherwise would tell someone who
+     * gave up ten minutes ago that they have been idle for days.
+     *
+     * Records dated into the future are ignored. The calendar can plan a
+     * session, and a plan is not a thing already done; counting one would run
+     * the clock backwards.
+     */
+    fun lastSessionEndedAt(): Long? {
+        val now = System.currentTimeMillis()
+        return _records.value
+            .asSequence()
+            .filter { !it.isRest }
+            .map { it.endsAt }
+            .filter { it in 1..now }
+            .maxOrNull()
+    }
+
     fun todayFocusMinutes(): Int {
         val today = Time.localDateKey(System.currentTimeMillis())
         return _records.value

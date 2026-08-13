@@ -243,6 +243,7 @@
     <string name="settings_dnd_unsupported">이 휴대폰에는 방해 금지 액세스 화면이 없어요.</string>
     <string name="notif_sync_title">변경 사항 확인 중</string>
     <string name="notif_sync_text">이 기기에서 목록과 기록을 최신으로 유지해요.</string>
+    <string name="notif_sync_subtext">동기화 중</string>
 
     <!-- Widget -->
     <string name="widget_pin">홈 화면에 투두 위젯 추가</string>
@@ -255,9 +256,14 @@
     <string name="notif_channel_idle">알림</string>
     <string name="notif_channel_idle_desc">아무것도 자라지 않을 때 조용히 알려줘요.</string>
     <string name="notif_idle_title">숲이 기다리고 있어요 🌱</string>
-    <string name="notif_idle_empty">지금은 자라는 게 없어요. 세션을 시작해 나무를 심어보세요.</string>
+    <string name="notif_idle_since">마지막 세션 이후 %1$s 지났어요</string>
+    <string name="notif_idle_never">아직 심은 나무가 없어요. 첫 나무는 한 번의 탭이면 돼요.</string>
+    <string name="notif_idle_none_today">오늘은 아직 자란 게 없어요. 짧은 세션도 충분해요.</string>
     <string name="notif_idle_progress">오늘 %1$s 집중했어요. 나무를 하나 더 심어볼까요?</string>
     <string name="notif_idle_action">집중 시작</string>
+    <plurals name="notif_idle_days">
+        <item quantity="other">%1$d일</item>
+    </plurals>
     <string name="settings_idle_reminder">실행 중이 없을 때 알림</string>
     <string name="notif_permission_rationale">알림을 허용하면 실행 중인 타이머가 계속 보이고, 끝날 때 알려드려요.</string>
     <string name="notif_permission_allow">허용</string>

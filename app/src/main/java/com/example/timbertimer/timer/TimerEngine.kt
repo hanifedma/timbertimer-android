@@ -142,7 +142,7 @@ class TimerEngine(
                 // The service may itself have been the casualty; this both
                 // revives it and reposts through it.
                 syncService()
-                notifications.update(_timer.value, _rest.value)
+                postOngoing()
             }
 
             TimerNotifications.WHICH_IDLE -> refreshIdleNudge()
@@ -169,7 +169,7 @@ class TimerEngine(
         // the exact-alarm grant that permits it does not outlive this call.
         syncService()
         if (!notifications.isShowing(TimerNotifications.ID_RUNNING)) {
-            notifications.update(_timer.value, _rest.value)
+            postOngoing()
         }
     }
 
@@ -186,7 +186,24 @@ class TimerEngine(
             notifications.cancelIdle()
             return
         }
-        notifications.showIdle(repository.todayFocusMinutes())
+        notifications.showIdle(idleSummary() ?: return)
+    }
+
+    /**
+     * How long the forest has been still, and what grew today — null while
+     * something is running, because then neither is what the notification is
+     * for and gathering them would be work for nothing.
+     */
+    fun idleSummary(): TimerNotifications.IdleSummary? {
+        if (_timer.value != null || _rest.value != null) return null
+        return TimerNotifications.IdleSummary(
+            lastEndedAt = repository.lastSessionEndedAt(),
+            todayMinutes = repository.todayFocusMinutes(),
+        )
+    }
+
+    private fun postOngoing() {
+        notifications.update(_timer.value, _rest.value, idleSummary())
     }
 
     /**
@@ -363,6 +380,13 @@ class TimerEngine(
             }
 
             repository.createRecord(record)
+            // applyTimer above cleared the notification's timer while this
+            // record did not yet exist, so the count-up clock started from the
+            // session before this one. Now that it is stored, restart it from
+            // the right instant rather than leaving an hours-old figure sitting
+            // under an alert that just said "planted".
+            postOngoing()
+            refreshIdleNudge()
             _messages.tryEmit(
                 UiMessage.of(
                     if (status == RecordStatus.COMPLETED) R.string.toast_session_planted

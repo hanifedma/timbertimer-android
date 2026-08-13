@@ -160,6 +160,36 @@ opens Android's own exemption dialog. Be aware that no app can truly be immune:
 several manufacturers stop background work regardless of what that dialog says,
 and that is a decision made below the app.
 
+### The clock that runs when nothing else does
+
+With no timer and no stopwatch going, the notification counts *up* from the end
+of your last session — the same platform chronometer the running timer uses,
+pointed the other way. "1h 30m since your last session", ticking, with today's
+total and a **Start focusing** button behind the expander.
+
+It is a clock on the wall, not a session: nothing about it is recorded, synced,
+or stored, and it never becomes a row in the database. It exists to make the gap
+visible, because a number you can see is a better argument for starting again
+than a notification that just says the app is running.
+
+Three details it gets right:
+
+- **It costs nothing to run.** The chronometer counts on its own from one instant
+  handed to it once, so it stays exact for days with the process dead. Only the
+  sentence beside it needs reposting, and that happens once a minute.
+- **It coarsens as it grows.** Under a day it ticks. Past a day the seconds stop
+  meaning anything and a ticking `74:12:31` reads as a scolding, so it switches
+  to "3 days since your last session" and shows the date of the last one instead.
+- **It knows when to say something else.** On a fresh install there is no gap to
+  count, so it offers the first tree rather than a zero. Rests are not sessions,
+  so resting does not reset it. And a session planted into the calendar for
+  tomorrow is a plan, not a thing done — those are ignored, or the clock would
+  run backwards.
+
+With background sync off, the standalone reminder carries the same chronometer
+but not the same sentence: there is no service to repost it, and a body reading
+"20m" beside a header reading 4:31:07 would be worse than no body at all.
+
 ### Notifications that stay put
 
 A notification describing something that is still happening should not disappear

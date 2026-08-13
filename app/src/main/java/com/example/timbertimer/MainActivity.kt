@@ -249,6 +249,9 @@ class MainActivity : ComponentActivity() {
     companion object {
         const val EXTRA_DESTINATION = "com.example.timbertimer.DESTINATION"
         const val DESTINATION_TASKS = "tasks"
+
+        /** Where "Start focusing" lands, so the invitation opens on the form. */
+        const val DESTINATION_FOCUS = "focus"
     }
 
     /**
