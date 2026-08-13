@@ -93,8 +93,11 @@ class TimerEngine(
     fun setForeground(value: Boolean) {
         foreground = value
         if (value) {
-            // Back in the app: the invitation has been accepted, or at least seen.
+            // Back in the app: the invitation has been accepted, or at least
+            // seen — and so has any finished session, which is the guaranteed
+            // way to be rid of an alert that otherwise survives being swiped.
             notifications.cancelIdle()
+            notifications.cancelCompleted()
             ensureTicking()
         } else {
             refreshIdleNudge()
@@ -121,6 +124,53 @@ class TimerEngine(
     /** Used when the reminder is switched off while it is already showing. */
     fun clearIdleNudge() {
         notifications.cancelIdle()
+    }
+
+    /**
+     * Puts back a notification the user swiped away, rebuilt from live state.
+     *
+     * Rebuilt rather than reposted verbatim because time has passed: a countdown
+     * dismissed at eight minutes left should come back saying seven. And the
+     * ongoing one is reposted only if it is still deserved — a timer that
+     * finished in the meantime removes the reason for it, and the dismissal then
+     * stands.
+     */
+    fun restoreNotification(which: Int) {
+        when (which) {
+            TimerNotifications.WHICH_ONGOING -> {
+                if (!serviceWanted()) return
+                // The service may itself have been the casualty; this both
+                // revives it and reposts through it.
+                syncService()
+                notifications.update(_timer.value, _rest.value)
+            }
+
+            TimerNotifications.WHICH_IDLE -> refreshIdleNudge()
+        }
+    }
+
+    /**
+     * The quarter-hourly heartbeat.
+     *
+     * Everything here is a no-op when the app is healthy, which is the point: it
+     * costs one wake-up to find out, and the alternative is a phone whose
+     * battery manager quietly stopped the service hours ago with nothing on
+     * screen to say so.
+     */
+    fun onWatchdogTick() {
+        if (!serviceWanted()) {
+            alarms.cancelWatchdog()
+            refreshIdleNudge()
+            return
+        }
+
+        notifications.ensureChannels()
+        // Restarting the service is the first thing done, and done synchronously:
+        // the exact-alarm grant that permits it does not outlive this call.
+        syncService()
+        if (!notifications.isShowing(TimerNotifications.ID_RUNNING)) {
+            notifications.update(_timer.value, _rest.value)
+        }
     }
 
     /**
@@ -522,12 +572,20 @@ class TimerEngine(
      * unnoticed in the tablet's widget until the app was opened there.
      */
     private fun syncService() {
-        if (_timer.value != null || _rest.value != null || settings.backgroundSync.value) {
+        if (serviceWanted()) {
             TimerService.start(appContext)
+            // Re-armed on every pass, so the heartbeat keeps beating for as long
+            // as there is something to watch and stops the moment there is not.
+            alarms.scheduleWatchdog(urgent = _timer.value != null || _rest.value != null)
         } else {
             TimerService.stop(appContext)
+            alarms.cancelWatchdog()
         }
     }
+
+    /** The two reasons the service — and its notification — should be alive. */
+    private fun serviceWanted(): Boolean =
+        _timer.value != null || _rest.value != null || settings.backgroundSync.value
 
     /** Called when the background-sync switch is flipped, to start or stop now. */
     fun onBackgroundSyncChanged() {

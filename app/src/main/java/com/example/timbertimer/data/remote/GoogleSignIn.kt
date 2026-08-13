@@ -1,11 +1,16 @@
 package com.example.timbertimer.data.remote
 
 import android.content.Context
+import androidx.credentials.ClearCredentialStateRequest
 import androidx.credentials.CredentialManager
+import androidx.credentials.CredentialOption
 import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialCancellationException
 import androidx.credentials.exceptions.GetCredentialException
+import androidx.credentials.exceptions.GetCredentialProviderConfigurationException
+import androidx.credentials.exceptions.NoCredentialException
+import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import java.security.MessageDigest
@@ -22,22 +27,22 @@ import java.security.SecureRandom
  * removes the redirect entirely, so the sheet is the platform's own, it carries
  * this app's name and icon, and it never mentions Supabase.
  *
- * Everything that can go wrong — no Play Services, no Google account on the
- * device, an unregistered signing certificate — comes back as
- * [Result.Unavailable], and the caller falls back to the browser flow. That is
- * deliberate: this is a nicer way in, never the only way in.
+ * Two credential options are tried in turn, because they fail in opposite
+ * directions. [GetGoogleIdOption] shows the accounts already on the device,
+ * which is one tap and the common case, but it has nothing to offer a phone
+ * with no Google account signed in. [GetSignInWithGoogleOption] shows the full
+ * branded flow, which can add one. Trying the first and falling through to the
+ * second on [NoCredentialException] covers both without ever asking the user to
+ * understand the difference.
  */
-class GoogleSignIn(private val webClientId: String = SupabaseConfig.GOOGLE_WEB_CLIENT_ID) {
+class GoogleSignIn(
+    context: Context,
+    private val webClientId: String = SupabaseConfig.GOOGLE_WEB_CLIENT_ID,
+) {
+
+    private val appContext = context.applicationContext
 
     val isConfigured: Boolean get() = webClientId.isNotBlank()
-
-    /**
-     * Set once the sheet has proved unusable on this device, so a second tap
-     * goes straight to the browser instead of failing the same way again.
-     * Deliberately not persisted: a missing Play Services update or an absent
-     * Google account can be fixed, and the next launch should try afresh.
-     */
-    private var unusable = false
 
     /**
      * Shows the sheet and returns the ID token Google minted for this request.
@@ -45,40 +50,81 @@ class GoogleSignIn(private val webClientId: String = SupabaseConfig.GOOGLE_WEB_C
      * [context] must be an Activity: the sheet is drawn over it.
      */
     suspend fun requestIdToken(context: Context): Result {
-        if (!isConfigured || unusable) return Result.Unavailable(null)
+        if (!isConfigured) return Result.Unavailable(null)
 
         // Google receives the hash and Supabase the original, which is how the
         // token is proved to belong to this sign-in rather than a replayed one.
         val rawNonce = randomNonce()
-        val option = GetSignInWithGoogleOption.Builder(webClientId)
-            .setNonce(sha256Hex(rawNonce))
+        val hashedNonce = sha256Hex(rawNonce)
+
+        val onDevice = GetGoogleIdOption.Builder()
+            .setServerClientId(webClientId)
+            // false = offer every Google account on the device, not only the
+            // ones that have signed into this app before. The website shares
+            // this OAuth client, so filtering would usually leave a list of one
+            // with no visible way past it.
+            .setFilterByAuthorizedAccounts(false)
+            // Skip the silent one-tap so the chooser always appears and
+            // switching accounts stays possible.
+            .setAutoSelectEnabled(false)
+            .setNonce(hashedNonce)
             .build()
 
-        return try {
-            val response = CredentialManager.create(context).getCredential(
-                context = context,
-                request = GetCredentialRequest.Builder().addCredentialOption(option).build(),
-            )
-            val credential = response.credential
-            if (credential !is CustomCredential ||
-                credential.type != GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
-            ) {
-                unusable = true
-                return Result.Unavailable(null)
-            }
-            val idToken = GoogleIdTokenCredential.createFrom(credential.data).idToken
-            Result.Token(idToken, rawNonce)
-        } catch (cancelled: GetCredentialCancellationException) {
-            Result.Cancelled
-        } catch (error: GetCredentialException) {
-            // No account, no Play Services, or this build's signing certificate
-            // is not registered against the Android OAuth client.
-            unusable = true
-            Result.Unavailable(error.message)
-        } catch (error: Exception) {
-            unusable = true
-            Result.Unavailable(error.message)
+        val branded = GetSignInWithGoogleOption.Builder(webClientId)
+            .setNonce(hashedNonce)
+            .build()
+
+        return when (val first = attempt(context, onDevice, rawNonce)) {
+            // No account on the device yet: the branded flow can add one.
+            is Result.NoAccount -> attempt(context, branded, rawNonce)
+            else -> first
         }
+    }
+
+    /**
+     * Forgets which account was used, so the next sign-in shows the chooser
+     * instead of silently reusing the one just signed out of.
+     */
+    suspend fun forgetAccount() {
+        runCatching {
+            CredentialManager.create(appContext).clearCredentialState(
+                ClearCredentialStateRequest(ClearCredentialStateRequest.TYPE_CLEAR_CREDENTIAL_STATE)
+            )
+        }
+    }
+
+    private suspend fun attempt(
+        context: Context,
+        option: CredentialOption,
+        rawNonce: String,
+    ): Result = try {
+        val response = CredentialManager.create(context).getCredential(
+            context = context,
+            request = GetCredentialRequest.Builder().addCredentialOption(option).build(),
+        )
+        val credential = response.credential
+        if (credential !is CustomCredential ||
+            credential.type != GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
+        ) {
+            Result.Unavailable(null)
+        } else {
+            Result.Token(GoogleIdTokenCredential.createFrom(credential.data).idToken, rawNonce)
+        }
+    } catch (cancelled: GetCredentialCancellationException) {
+        Result.Cancelled
+    } catch (empty: NoCredentialException) {
+        Result.NoAccount
+    } catch (missing: GetCredentialProviderConfigurationException) {
+        // No Play Services, or a build of Android with no credential provider
+        // at all. Nothing on this device can show the sheet.
+        Result.Unavailable(missing.message)
+    } catch (error: GetCredentialException) {
+        // Most often this build's signing certificate is not registered against
+        // an Android OAuth client for this package. Not latched: it is also what
+        // a dropped connection looks like, and that fixes itself.
+        Result.Unavailable(error.message)
+    } catch (error: Exception) {
+        Result.Unavailable(error.message)
     }
 
     private fun randomNonce(): String {
@@ -97,6 +143,9 @@ class GoogleSignIn(private val webClientId: String = SupabaseConfig.GOOGLE_WEB_C
 
         /** The user dismissed the sheet — not an error, and not worth a fallback. */
         data object Cancelled : Result
+
+        /** No Google account on the device, and the branded flow added none. */
+        data object NoAccount : Result
 
         /** This device or this build cannot use the sheet; try the browser. */
         data class Unavailable(val reason: String?) : Result

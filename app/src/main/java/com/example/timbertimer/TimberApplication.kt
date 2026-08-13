@@ -55,7 +55,7 @@ class AppContainer(private val context: Context) {
 
     val auth = SupabaseAuth(context, httpClient, json)
 
-    val googleSignIn = GoogleSignIn()
+    val googleSignIn = GoogleSignIn(context)
 
     private val api = SupabaseApi(httpClient, json)
 

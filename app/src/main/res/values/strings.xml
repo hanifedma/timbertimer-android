@@ -198,6 +198,9 @@
     <string name="auth_cancelled">Sign-in cancelled.</string>
     <string name="auth_verify_failed">Sign-in could not be verified. Please try again.</string>
     <string name="auth_no_browser">No browser available to sign in with.</string>
+    <string name="auth_no_google_account">No Google account on this phone. Add one in Android’s settings, then try again.</string>
+    <string name="auth_sheet_unavailable">Google’s sign-in sheet is unavailable on this phone. Falling back to the browser.</string>
+    <string name="auth_native_rejected">Google signed you in, but the server would not accept it. Falling back to the browser.</string>
 
     <!-- Confirmations -->
     <string name="confirm_delete_all_cloud">Delete all cloud records? This cannot be undone.</string>
@@ -238,6 +241,10 @@
     <string name="settings_battery">Ignore battery optimisation</string>
     <string name="settings_battery_desc">Ask Android to stop putting TimberTimer to sleep. Without this, some phones cut background syncing off after a few minutes.</string>
     <string name="settings_battery_already">Already exempt from battery optimisation.</string>
+    <string name="settings_dnd">Allow alerts in Do Not Disturb</string>
+    <string name="settings_dnd_desc">Lets a finished session still chime while the phone is silenced — which is exactly when you are most likely to be focusing. Android only grants this from its own settings screen.</string>
+    <string name="settings_dnd_already">Alerts are already allowed through Do Not Disturb.</string>
+    <string name="settings_dnd_unsupported">This phone has no Do Not Disturb access screen.</string>
     <string name="notif_sync_title">Watching for changes</string>
     <string name="notif_sync_text">Your list and records stay current on this device.</string>
 

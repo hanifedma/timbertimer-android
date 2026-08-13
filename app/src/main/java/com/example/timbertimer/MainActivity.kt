@@ -59,6 +59,7 @@ class MainActivity : ComponentActivity() {
             container.settings,
             container.auth,
             container.feedback,
+            container.googleSignIn,
         )
     }
 
@@ -110,6 +111,7 @@ class MainActivity : ComponentActivity() {
                     onSignIn = ::signInWithGoogle,
                     onAddWidget = ::requestPinWidget,
                     onIgnoreBatteryOptimisation = ::requestIgnoreBatteryOptimisation,
+                    onAllowDoNotDisturb = ::requestDoNotDisturbAccess,
                 )
             }
         }
@@ -130,6 +132,12 @@ class MainActivity : ComponentActivity() {
      */
     override fun onStart() {
         super.onStart()
+        // Coming back may mean coming back from the Do Not Disturb access list,
+        // and a channel's bypass can only be set as it is created — so this is
+        // the moment to build the ones that now can be. Retiring the old channel
+        // takes whatever was posted on it down with it, hence the repost.
+        val container = (application as TimberApplication).container
+        if (container.notifications.ensureChannels()) container.timerEngine.onWatchdogTick()
         viewModel.onResume()
     }
 
@@ -216,6 +224,28 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * Opens Android's Do Not Disturb access list.
+     *
+     * An app cannot let itself through Do Not Disturb — the platform ignores the
+     * request on every channel until the user grants policy access here. Once
+     * granted, [onStart] rebuilds the channels so the finished-session alert is
+     * actually heard while the phone is silenced, which is exactly when a focus
+     * session is most likely to be running.
+     */
+    private fun requestDoNotDisturbAccess() {
+        val notifications = (application as TimberApplication).container.notifications
+        if (notifications.canBypassDoNotDisturb()) {
+            Toast.makeText(this, R.string.settings_dnd_already, Toast.LENGTH_LONG).show()
+            return
+        }
+        try {
+            startActivity(Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS))
+        } catch (_: ActivityNotFoundException) {
+            Toast.makeText(this, R.string.settings_dnd_unsupported, Toast.LENGTH_LONG).show()
+        }
+    }
+
     companion object {
         const val EXTRA_DESTINATION = "com.example.timbertimer.DESTINATION"
         const val DESTINATION_TASKS = "tasks"
@@ -223,14 +253,18 @@ class MainActivity : ComponentActivity() {
 
     /**
      * Signs in with Android's own credential sheet, and falls back to the
-     * browser when that is not available.
+     * browser only when the device cannot show one.
      *
      * The sheet is the better door: it carries this app's name and icon and
      * never mentions the Supabase callback, which the browser flow has to travel
      * through and which Google therefore names on its prompt. But it needs Play
      * Services, a Google account on the device, and this build's signing
-     * certificate registered against the Android OAuth client — so every way it
-     * can be unavailable leads back to the flow that always works.
+     * certificate registered against an Android OAuth client.
+     *
+     * When any of that is missing the browser still works, so it is still
+     * offered — but the reason is said out loud first. Dropping to the browser
+     * silently is what made a fixable setup problem look like the app's normal
+     * behaviour.
      */
     private fun signInWithGoogle() {
         lifecycleScope.launch {
@@ -238,15 +272,24 @@ class MainActivity : ComponentActivity() {
             when (val result = container.googleSignIn.requestIdToken(this@MainActivity)) {
                 is GoogleSignIn.Result.Token -> {
                     if (viewModel.completeGoogleSignIn(result.idToken, result.rawNonce)) return@launch
-                    // Supabase refused the token, most likely because this client
-                    // id is not on its Authorized Client IDs list.
+                    // Google minted a token and Supabase would not take it —
+                    // almost always because this client id is not on the Google
+                    // provider's Authorized Client IDs list. The browser flow
+                    // does not go through that check, so it is worth a try.
+                    viewModel.notify(R.string.auth_native_rejected)
                     openAuthInBrowser()
                 }
 
                 // Dismissing the sheet is an answer, not a failure.
                 GoogleSignIn.Result.Cancelled -> Unit
 
-                is GoogleSignIn.Result.Unavailable -> openAuthInBrowser()
+                // Nothing to choose from, and the branded flow added nothing.
+                GoogleSignIn.Result.NoAccount -> viewModel.notify(R.string.auth_no_google_account)
+
+                is GoogleSignIn.Result.Unavailable -> {
+                    viewModel.notify(R.string.auth_sheet_unavailable)
+                    openAuthInBrowser()
+                }
             }
         }
     }

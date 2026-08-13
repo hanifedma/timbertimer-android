@@ -114,6 +114,7 @@ fun TimberApp(
     onSignIn: () -> Unit,
     onAddWidget: () -> Unit,
     onIgnoreBatteryOptimisation: () -> Unit,
+    onAllowDoNotDisturb: () -> Unit,
 ) {
     val context = LocalContext.current
     val snackbarHost = remember { SnackbarHostState() }
@@ -360,6 +361,7 @@ fun TimberApp(
                                 onIdleReminderChange = viewModel::setIdleReminder,
                                 onBackgroundSyncChange = viewModel::setBackgroundSync,
                                 onIgnoreBatteryOptimisation = onIgnoreBatteryOptimisation,
+                                onAllowDoNotDisturb = onAllowDoNotDisturb,
                                 onAddWidget = onAddWidget,
                                 onManageProjects = { managingProjects = true },
                                 projectsSyncBlocked = projectsSyncBlocked,

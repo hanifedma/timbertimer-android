@@ -60,16 +60,71 @@ class TimerAlarms(context: Context) {
         runCatching { manager?.cancel(pendingIntent()) }
     }
 
-    private fun pendingIntent(): PendingIntent = PendingIntent.getBroadcast(
-        appContext,
-        REQUEST_CODE,
-        Intent(appContext, TimerAlarmReceiver::class.java).setAction(ACTION_DUE),
-        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-    )
+    /**
+     * Schedules the next heartbeat: one wake-up, a quarter of an hour out, that
+     * checks the app is still where it said it would be.
+     *
+     * This is what covers the failure the completion alarm cannot. That one only
+     * fires when a countdown is due, so a process killed while a *stopwatch* ran
+     * — or while nothing ran but background sync was on — stayed dead, taking
+     * the notification with it and leaving the shade silently wrong. The
+     * heartbeat notices and puts everything back.
+     *
+     * [urgent] is what stops this costing battery for nothing. A running timer
+     * earns an exact wake-up: the notification is the timer as far as the user
+     * is concerned, and an exact alarm is also one of the few things the
+     * platform still lets restart a foreground service from the background. With
+     * nothing running it is only the sync notification at stake, so the wake-up
+     * is left inexact and Doze batches it into the next maintenance window —
+     * which arrives the moment the phone is picked up, and that is the only
+     * moment anyone can see the shade anyway.
+     *
+     * It re-arms itself each time, so there is exactly one outstanding.
+     */
+    fun scheduleWatchdog(urgent: Boolean) {
+        val alarmManager = manager ?: return
+        val at = System.currentTimeMillis() + WATCHDOG_INTERVAL_MS
+        val exact = urgent && (
+            Build.VERSION.SDK_INT < Build.VERSION_CODES.S || alarmManager.canScheduleExactAlarms()
+            )
+
+        runCatching {
+            if (exact) {
+                alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, watchdogIntent())
+            } else {
+                alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, watchdogIntent())
+            }
+        }
+    }
+
+    fun cancelWatchdog() {
+        runCatching { manager?.cancel(watchdogIntent()) }
+    }
+
+    private fun pendingIntent(): PendingIntent = broadcast(REQUEST_CODE, ACTION_DUE)
+
+    private fun watchdogIntent(): PendingIntent = broadcast(WATCHDOG_REQUEST_CODE, ACTION_WATCHDOG)
+
+    private fun broadcast(requestCode: Int, action: String): PendingIntent =
+        PendingIntent.getBroadcast(
+            appContext,
+            requestCode,
+            Intent(appContext, TimerAlarmReceiver::class.java).setAction(action),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
 
     companion object {
         const val ACTION_DUE = "com.example.timbertimer.TIMER_DUE"
+        const val ACTION_WATCHDOG = "com.example.timbertimer.WATCHDOG"
         private const val REQUEST_CODE = 4201
+        private const val WATCHDOG_REQUEST_CODE = 4202
+
+        /**
+         * Fifteen minutes: the shortest interval Doze will honour for a
+         * repeating wake-up on every Android version, so asking for less would
+         * cost battery without arriving any sooner.
+         */
+        private const val WATCHDOG_INTERVAL_MS = 15 * 60 * 1000L
     }
 }
 
@@ -82,6 +137,13 @@ class TimerAlarmReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val container = (context.applicationContext as? TimberApplication)?.container ?: return
         val pending = goAsync()
+
+        if (intent.action == TimerAlarms.ACTION_WATCHDOG) {
+            // Synchronously, and before anything that can suspend: restarting a
+            // foreground service from the background is allowed here only as a
+            // short-lived grant tied to this exact alarm, and it expires.
+            container.timerEngine.onWatchdogTick()
+        }
 
         container.scope.launch {
             try {
@@ -101,10 +163,10 @@ class TimerAlarmReceiver : BroadcastReceiver() {
 class BootCompletedReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
-        val action = intent.action
-        if (action != Intent.ACTION_BOOT_COMPLETED && action != Intent.ACTION_MY_PACKAGE_REPLACED) {
-            return
-        }
+        // Several manufacturers' "fast boot" never broadcasts BOOT_COMPLETED and
+        // sends one of the QUICKBOOT actions instead, which is why a timer used
+        // to disappear over a restart on exactly those phones.
+        if (intent.action !in HANDLED) return
 
         val container = (context.applicationContext as? TimberApplication)?.container ?: return
         val pending = goAsync()
@@ -121,5 +183,14 @@ class BootCompletedReceiver : BroadcastReceiver() {
                 pending.finish()
             }
         }
+    }
+
+    private companion object {
+        val HANDLED = setOf(
+            Intent.ACTION_BOOT_COMPLETED,
+            Intent.ACTION_MY_PACKAGE_REPLACED,
+            "android.intent.action.QUICKBOOT_POWERON",
+            "com.htc.intent.action.QUICKBOOT_POWERON",
+        )
     }
 }

@@ -78,7 +78,21 @@ mentioned. Three things have to line up:
 1. **Google Cloud Console → APIs & Services → Credentials → Create credentials →
    OAuth client ID → Android.** Package name `com.example.timbertimer`, and the
    SHA-1 of whichever certificate signs the build you install. This entry is what
-   authorises the app to ask; it does not replace the web client.
+   authorises the app to ask; it does not replace the web client. **This is the
+   step that is usually missing**, and it is the whole reason sign-in ends up in
+   a browser. Create it in the *same* Google Cloud project as the web client
+   below — a client in some other project does not count.
+
+   The two fingerprints for this repo, so there is nothing to look up:
+
+   | Build | SHA-1 |
+   | --- | --- |
+   | Release (`timbertimer-release.jks`) | `F1:96:FC:7C:A5:44:B9:22:E6:D4:16:55:D0:43:33:CB:5B:86:1A:9F` |
+   | Debug (`~/.android/debug.keystore`) | `3D:29:58:C6:75:80:7A:A5:49:1F:A4:D2:56:1F:FB:8B:BB:2B:0D:A6` |
+
+   Register **both** if you install both. They are separate certificates, so an
+   Android client for one says nothing about the other. Regenerate them any time
+   with `keytool -list -v -keystore <file> -alias <alias>`.
 2. **`SupabaseConfig.GOOGLE_WEB_CLIENT_ID`** must hold the *web* client id — the
    same one the website puts in `src/supabase-config.js`. It is the audience of
    the token, and a client id is public by design.
@@ -86,8 +100,10 @@ mentioned. Three things have to line up:
    list that web client id, which is what lets Supabase accept the token.
 
 Anything missing — an unregistered certificate, no Play Services, no Google
-account on the phone — and the app quietly falls back to the browser redirect,
-which keeps working exactly as before.
+account on the phone — and the app falls back to the browser redirect, which
+keeps working exactly as before. It now says which of those it hit before doing
+so, because a silent fallback made a five-minute console fix look like the app's
+normal behaviour.
 
 ## Two more setup steps, both optional
 
@@ -143,6 +159,33 @@ It restarts itself after a reboot, and **Settings → Ignore battery optimisatio
 opens Android's own exemption dialog. Be aware that no app can truly be immune:
 several manufacturers stop background work regardless of what that dialog says,
 and that is a decision made below the app.
+
+### Notifications that stay put
+
+A notification describing something that is still happening should not disappear
+while it is still happening. Three things keep that true:
+
+- **Swiping one away puts it back.** From Android 14 even an ongoing
+  foreground-service notification can be flicked aside, and doing so does not
+  stop the timer or close the sync connection — so the shade would be left
+  claiming the app is idle while it is doing the opposite. Every notification
+  carries a delete intent that reposts it. The way out is never blocked:
+  finishing the timer, turning **Keep syncing in the background** off, or turning
+  **Remind me when nothing is running** off each removes the reason, and with it
+  the notification. The finished-session alert clears for good when you tap it or
+  open the app.
+- **A quarter-hourly heartbeat.** A vendor battery manager that stops the service
+  used to take the notification with it, silently, until something opened the
+  app. An alarm now checks, restarts the service and reposts. It is exact only
+  while a timer is running; with nothing but sync at stake it is left inexact so
+  Doze can batch it. The service also re-checks whenever battery saver toggles,
+  Doze lifts, or the screen comes on.
+- **Do Not Disturb.** `Settings → Allow alerts in Do Not Disturb` opens Android's
+  policy-access screen. An app cannot grant itself this, and until it is granted
+  the platform ignores the request on every channel — so the app only asks. Once
+  granted, the channels are rebuilt with the bypass set (it can only be chosen as
+  a channel is created, never afterwards), and a finished session chimes even
+  with the phone silenced.
 
 ## The widget
 

@@ -1,11 +1,15 @@
 package com.example.timbertimer.timer
 
 import android.app.Service
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.os.PowerManager
+import androidx.core.content.ContextCompat
 import com.example.timbertimer.TimberApplication
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -32,9 +36,23 @@ class TimerService : Service() {
 
     private var scope: CoroutineScope? = null
     private var lastPostedAt = 0L
+    private var lastVerifiedAt = 0L
     private var postedIdle = false
 
     private val container get() = (application as TimberApplication).container
+
+    /**
+     * Battery saver turning on, Doze letting go, the screen waking: each is a
+     * moment a vendor power manager may have swept the shade on the way past,
+     * and each is cheap to check. Registered here rather than in the manifest
+     * because most of these cannot be declared there — and because there is
+     * nothing to check when the service is not running anyway.
+     */
+    private val powerEvents = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            repostIfMissing()
+        }
+    }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -48,6 +66,7 @@ class TimerService : Service() {
         // Enter the foreground straight away: the platform allows only a few
         // seconds between starting and calling startForeground.
         promote()
+        registerPowerEvents()
 
         serviceScope.launch {
             val engine = container.timerEngine
@@ -83,8 +102,50 @@ class TimerService : Service() {
     override fun onDestroy() {
         scope?.cancel()
         scope = null
+        runCatching { unregisterReceiver(powerEvents) }
         container.notifications.cancelOngoing()
         super.onDestroy()
+    }
+
+    /**
+     * The user swiped the app out of Recents.
+     *
+     * Several manufacturers treat that as "kill everything this app owns",
+     * service and all, which is the single most common way a running timer
+     * disappears. START_STICKY is supposed to bring the service back and
+     * usually does; re-arming the heartbeat here is the backstop for the builds
+     * where it does not.
+     */
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        container.timerEngine.onWatchdogTick()
+        super.onTaskRemoved(rootIntent)
+    }
+
+    private fun registerPowerEvents() {
+        val filter = IntentFilter().apply {
+            addAction(Intent.ACTION_SCREEN_ON)
+            addAction(Intent.ACTION_USER_PRESENT)
+            addAction(Intent.ACTION_BATTERY_LOW)
+            addAction(Intent.ACTION_BATTERY_OKAY)
+            addAction(PowerManager.ACTION_POWER_SAVE_MODE_CHANGED)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                addAction(PowerManager.ACTION_DEVICE_IDLE_MODE_CHANGED)
+            }
+        }
+        runCatching {
+            ContextCompat.registerReceiver(
+                this,
+                powerEvents,
+                filter,
+                ContextCompat.RECEIVER_NOT_EXPORTED,
+            )
+        }
+    }
+
+    /** Repost only when the notification really has gone, not on every event. */
+    private fun repostIfMissing() {
+        if (container.notifications.isShowing(TimerNotifications.ID_RUNNING)) return
+        promote()
     }
 
     /**
@@ -99,7 +160,16 @@ class TimerService : Service() {
         val now = System.currentTimeMillis()
         // The idle notification says nothing that changes second to second, so
         // it is posted once on the transition rather than on every tick.
-        val due = if (idle) !postedIdle else now - lastPostedAt >= REPOST_INTERVAL_MS
+        var due = if (idle) !postedIdle else now - lastPostedAt >= REPOST_INTERVAL_MS
+
+        // Neither schedule notices a notification that was removed without the
+        // app being told — the idle one least of all, since it is posted once
+        // and then never again. Asking the system now and then is what closes
+        // that gap; it is a binder call, so not every second.
+        if (!due && now - lastVerifiedAt >= VERIFY_INTERVAL_MS) {
+            lastVerifiedAt = now
+            due = !container.notifications.isShowing(TimerNotifications.ID_RUNNING)
+        }
         if (!due) return
 
         lastPostedAt = now
@@ -143,6 +213,9 @@ class TimerService : Service() {
 
         /** Fast enough that the progress bar tracks, slow enough to be free. */
         private const val REPOST_INTERVAL_MS = 5_000L
+
+        /** How often to ask the system whether the notification is still there. */
+        private const val VERIFY_INTERVAL_MS = 20_000L
 
         fun start(context: Context) {
             val intent = Intent(context, TimerService::class.java)

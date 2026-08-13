@@ -1,6 +1,7 @@
 package com.example.timbertimer.ui
 
 import android.net.Uri
+import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
@@ -18,6 +19,7 @@ import com.example.timbertimer.data.model.Projects
 import com.example.timbertimer.data.model.RecordStatus
 import com.example.timbertimer.data.model.TimerMode
 import com.example.timbertimer.data.model.TreeSpecies
+import com.example.timbertimer.data.remote.GoogleSignIn
 import com.example.timbertimer.data.remote.MissingVerifierException
 import com.example.timbertimer.data.remote.SupabaseAuth
 import com.example.timbertimer.timer.TimerEngine
@@ -129,6 +131,7 @@ class TimberViewModel(
     val settings: SettingsStore,
     private val auth: SupabaseAuth,
     private val feedback: TimerFeedback,
+    private val googleSignIn: GoogleSignIn,
 ) : ViewModel() {
 
     val records = repository.records
@@ -698,6 +701,11 @@ class TimberViewModel(
     suspend fun authorizeUrl(): String? =
         runCatching { auth.buildAuthorizeUrl() }.getOrNull()
 
+    /** Lets the activity, which owns the sign-in sheet, speak in the app's voice. */
+    fun notify(@StringRes message: Int) {
+        _messages.tryEmit(UiMessage.of(message))
+    }
+
     /**
      * Finishes a sign-in that Google completed on-device.
      *
@@ -746,6 +754,10 @@ class TimberViewModel(
     fun signOut() {
         viewModelScope.launch {
             auth.signOut()
+            // Otherwise the credential sheet reuses the account just left behind
+            // without ever showing the chooser, and signing in as someone else
+            // becomes impossible from inside the app.
+            googleSignIn.forgetAccount()
             _messages.emit(UiMessage.of(R.string.toast_signed_out))
         }
     }
@@ -788,8 +800,11 @@ class TimberViewModel(
             settings: SettingsStore,
             auth: SupabaseAuth,
             feedback: TimerFeedback,
+            googleSignIn: GoogleSignIn,
         ) = viewModelFactory {
-            initializer { TimberViewModel(repository, engine, settings, auth, feedback) }
+            initializer {
+                TimberViewModel(repository, engine, settings, auth, feedback, googleSignIn)
+            }
         }
     }
 }

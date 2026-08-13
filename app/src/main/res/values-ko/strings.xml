@@ -195,6 +195,9 @@
     <string name="auth_cancelled">로그인을 취소했어요.</string>
     <string name="auth_verify_failed">로그인을 확인하지 못했어요. 다시 시도해 주세요.</string>
     <string name="auth_no_browser">로그인에 사용할 브라우저가 없어요.</string>
+    <string name="auth_no_google_account">이 휴대폰에 Google 계정이 없어요. Android 설정에서 추가한 뒤 다시 시도해 주세요.</string>
+    <string name="auth_sheet_unavailable">이 휴대폰에서는 Google 로그인 시트를 쓸 수 없어요. 브라우저로 진행할게요.</string>
+    <string name="auth_native_rejected">Google 로그인은 됐지만 서버가 받아주지 않았어요. 브라우저로 진행할게요.</string>
 
     <!-- Confirmations -->
     <string name="confirm_delete_all_cloud">모든 클라우드 기록을 삭제할까요? 되돌릴 수 없어요.</string>
@@ -234,6 +237,10 @@
     <string name="settings_battery">배터리 최적화 제외</string>
     <string name="settings_battery_desc">안드로이드가 TimberTimer를 잠재우지 않도록 요청해요. 설정하지 않으면 일부 기기는 몇 분 뒤 백그라운드 동기화를 중단합니다.</string>
     <string name="settings_battery_already">이미 배터리 최적화에서 제외되어 있어요.</string>
+    <string name="settings_dnd">방해 금지 모드에서도 알림 허용</string>
+    <string name="settings_dnd_desc">휴대폰이 무음일 때도 세션이 끝나면 소리가 나게 해요. 집중 중일 때가 바로 그런 순간이니까요. 이 권한은 Android 설정 화면에서만 켤 수 있어요.</string>
+    <string name="settings_dnd_already">이미 방해 금지 모드에서도 알림이 허용되어 있어요.</string>
+    <string name="settings_dnd_unsupported">이 휴대폰에는 방해 금지 액세스 화면이 없어요.</string>
     <string name="notif_sync_title">변경 사항 확인 중</string>
     <string name="notif_sync_text">이 기기에서 목록과 기록을 최신으로 유지해요.</string>
 

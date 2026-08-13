@@ -54,6 +54,7 @@ fun SettingsScreen(
     onIdleReminderChange: (Boolean) -> Unit,
     onBackgroundSyncChange: (Boolean) -> Unit,
     onIgnoreBatteryOptimisation: () -> Unit,
+    onAllowDoNotDisturb: () -> Unit,
     onAddWidget: () -> Unit,
     onManageProjects: () -> Unit,
     projectsSyncBlocked: Boolean,
@@ -244,6 +245,18 @@ fun SettingsScreen(
             }
             Text(
                 text = stringResource(R.string.settings_battery_desc),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+
+            Spacer(Modifier.height(12.dp))
+
+            OutlinedButton(onClick = onAllowDoNotDisturb, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.settings_dnd), textAlign = TextAlign.Center)
+            }
+            Text(
+                text = stringResource(R.string.settings_dnd_desc),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 8.dp),

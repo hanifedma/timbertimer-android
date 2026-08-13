@@ -35,6 +35,14 @@
     -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
+    <!--
+      Lets the app's channels ask to be heard through Do Not Disturb. Declaring
+      it grants nothing on its own — the user has to hand the app policy access
+      from Settings, and until they do the platform ignores the request. Nothing
+      here reads or edits the user's DND rules.
+    -->
+    <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
+
     <!-- Phones without a vibrator still install; the app simply does not buzz. -->
     <uses-feature
         android:name="android.hardware.vibrate"
@@ -99,9 +107,22 @@
                 android:value="Keeps a user-started focus countdown or stopwatch running and visible in its ongoing notification, and keeps the user's own to-do list and focus records in sync across their devices, while the app is in the background." />
         </service>
 
-        <!-- Exact-alarm backstop: fires completion even if the service was killed. -->
+        <!--
+          Two alarms land here: the exact one that fires a countdown's completion
+          even if the service was killed, and the quarter-hourly heartbeat that
+          notices the service was killed at all.
+        -->
         <receiver
             android:name=".timer.TimerAlarmReceiver"
+            android:exported="false" />
+
+        <!--
+          Puts back a notification the user swiped away while the thing it
+          describes is still going on. Private: only this app's own delete
+          intents can reach it.
+        -->
+        <receiver
+            android:name=".timer.NotificationRestorer"
             android:exported="false" />
 
         <!--
@@ -148,6 +169,9 @@
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <!-- Several OEM "fast boot" paths send these instead. -->
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
             </intent-filter>
         </receiver>
     </application>
