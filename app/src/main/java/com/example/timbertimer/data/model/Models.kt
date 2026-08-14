@@ -166,7 +166,7 @@ object Limits {
     /** The longest countdown the timer form offers — a day-long one is a mistake. */
     const val TIMER_MINUTES_MAX = 600
 
-    const val DEFAULT_DURATION = 25
+    const val DEFAULT_DURATION = 30
 
     /**
      * Stored untranslated, exactly as the web app writes them, so a record reads

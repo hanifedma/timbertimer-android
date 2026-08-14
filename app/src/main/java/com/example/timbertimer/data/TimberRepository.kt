@@ -938,17 +938,23 @@ class TimberRepository(
      * Rests do not count: the question this answers is how long the forest has
      * been still, and a rest is the stillness, not the growth.
      *
-     * Records dated into the future are ignored. The calendar can plan a
-     * session, and a plan is not a thing already done; counting one would run
-     * the clock backwards.
+     * A session the calendar has *planned* is ignored: a plan is not a thing
+     * already done, and counting one would run the clock backwards.
      */
     fun lastSessionEndedAt(): Long? {
         val now = System.currentTimeMillis()
         return _records.value
             .asSequence()
             .filter { !it.isRest }
-            .map { it.endsAt }
-            .filter { it in 1..now }
+            // Judged by when it *began*. A session the calendar has planned has
+            // not happened yet and must not count; one that has only just
+            // finished ends up to a minute from now, because its length is
+            // rounded to whole minutes — and testing its end excluded it, so
+            // the app announced "nothing planted yet" for the first minute
+            // after planting something.
+            .filter { it.startedAt in 1..now }
+            // Clamped for that same session: it ended now, not in forty seconds.
+            .map { minOf(it.endsAt, now) }
             .maxOrNull()
     }
 

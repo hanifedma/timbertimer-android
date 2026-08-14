@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  The expanded running-timer notification.
+  The expanded clock notification, shared by the running timer and by the
+  "nothing is growing" nudge.
 
   Same parts as the collapsed row, given the room the expanded slot actually
   has: the clock at a size you can read without picking the phone up, the task

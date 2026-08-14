@@ -332,7 +332,7 @@ class TimerEngine(
 
             val elapsedSeconds = timer.elapsedSeconds()
             // A countdown that reached its end is credited in full: a second of
-            // rounding slack should not turn a 25-minute session into 24.
+            // rounding slack should not turn a 30-minute session into 29.
             // Anything else is the time that actually ran — at least a minute,
             // so a session leaves a tree rather than a record reading "0m", and
             // at most a day, which is what the table accepts.

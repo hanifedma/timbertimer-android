@@ -65,7 +65,7 @@ import com.example.timbertimer.ui.components.projectColors
 import com.example.timbertimer.ui.components.projectLabel
 import com.example.timbertimer.ui.components.rememberTreePalette
 
-private val DURATION_PRESETS = listOf(15, 25, 45, 60)
+private val DURATION_PRESETS = listOf(15, 30, 45, 60)
 
 /**
  * The focus screen.

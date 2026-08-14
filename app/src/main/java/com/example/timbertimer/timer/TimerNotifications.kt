@@ -31,9 +31,9 @@ import com.example.timbertimer.data.model.TreeSpecies
  * nudge when nothing is growing.
  *
  * The time itself is drawn by the platform's chronometer rather than by
- * restating the text every second. It counts down on its own once given the
- * instant to count to, which keeps the display exact while letting the service
- * repost only occasionally to move the progress bar.
+ * restating the text every second. It counts on its own once given the instant
+ * to count to or from, which keeps the display exact while letting the service
+ * repost only occasionally.
  *
  * Every notification here carries a delete intent. Dismissing one is not an
  * instruction to stop — the timer keeps running, the sync connection stays
@@ -157,8 +157,11 @@ class TimerNotifications(context: Context) {
             .setDeleteIntent(restoreIntent(WHICH_ONGOING))
             // Android 16 promotes a live, ongoing notification to a status bar
             // chip and a prominent lock screen slot — which is exactly what a
-            // running timer is. Older versions ignore the request.
-            .setRequestPromotedOngoing(true)
+            // running timer is, and exactly what the sync-only one is not.
+            // Asking for it unconditionally pinned a chip to the status bar
+            // saying nothing, for as long as background sync was on. Older
+            // versions ignore the request either way.
+            .setRequestPromotedOngoing(timer != null || rest != null)
 
         if (timer != null) {
             val countdown = timer.mode == TimerMode.COUNTDOWN
@@ -253,6 +256,10 @@ class TimerNotifications(context: Context) {
      * focus timer, where the clock is the entire content. There is no way to
      * resize that text, so the content area is replaced outright.
      *
+     * Used by the running timer and by the idle notification alike: "how long
+     * since you last focused" is a stopwatch too, and just as much the thing
+     * worth reading from across a desk.
+     *
      * [NotificationCompat.DecoratedCustomViewStyle] is what keeps this from
      * being a step backwards: the platform still draws the header, the app name,
      * the expander and the action buttons, so Finish and Give up look and behave
@@ -343,35 +350,70 @@ class TimerNotifications(context: Context) {
         // the body is spent on today's total instead — except on day one, when
         // there is no total and no clock, and the invitation is all there is.
         val body = if (worded) sinceLine else if (never) sinceLine else today
+        val title = context.getString(R.string.notif_idle_title)
 
         builder
-            .setContentTitle(context.getString(R.string.notif_idle_title))
+            .setContentTitle(title)
             .setContentText(body)
-            .setStyle(
-                NotificationCompat.BigTextStyle()
-                    .bigText(if (worded && !never) "$sinceLine\n$today" else body)
-            )
             .addAction(
                 0,
                 context.getString(R.string.notif_idle_action),
                 openApp(MainActivity.DESTINATION_FOCUS),
             )
 
-        when {
-            // Under a day, the seconds still mean something: let it tick.
-            since != null && elapsed in 0 until DAY_MS ->
-                builder.setWhen(since).setShowWhen(true)
-                    .setUsesChronometer(true)
-                    .setChronometerCountDown(false)
+        // Under a day, the seconds still mean something — so the gap gets the
+        // running timer's own clock, at the size that makes it readable from
+        // across a desk rather than filed away as a timestamp in the header.
+        if (since != null && elapsed in 0 until DAY_MS) {
+            builder.setWhen(since).setShowWhen(true)
+                .setUsesChronometer(true)
+                .setChronometerCountDown(false)
+            builder.applyBigClock(
+                title = title,
+                // The clock is a bare number without this: what it counts, and
+                // what today already has in it.
+                state = context.getString(R.string.notif_idle_clock_label) + " · " + todayShort(idle),
+                target = since,
+                countDown = false,
+                progress = null,
+            )
+            return
+        }
 
-            // Past a day a ticking clock reads as a scolding, and "74:12:31"
-            // tells nobody anything. The date of the last session does.
-            since != null && elapsed >= DAY_MS ->
-                builder.setWhen(since).setShowWhen(true).setUsesChronometer(false)
-
-            else -> builder.setShowWhen(false).setUsesChronometer(false)
+        // Past a day a ticking clock reads as a scolding, and "74:12:31" tells
+        // nobody anything. The date of the last session does, so the plain
+        // template — which can show one — is the better face.
+        //
+        // The choice is made here, when the notification is built. The ongoing
+        // one is rebuilt every minute and so crosses over on time; the
+        // standalone nudge is posted once and cannot be, so one posted at 23
+        // hours keeps ticking until the app is next opened. A clock that is
+        // merely blunt beats one that has quietly stopped being true.
+        builder.setStyle(
+            NotificationCompat.BigTextStyle()
+                .bigText(if (worded && !never) "$sinceLine\n$today" else body)
+        )
+        if (since != null) {
+            builder.setWhen(since).setShowWhen(true).setUsesChronometer(false)
+        } else {
+            builder.setShowWhen(false).setUsesChronometer(false)
         }
     }
+
+    /** "2h 15m today", or an admission that there is nothing to report yet. */
+    private fun todayShort(idle: IdleSummary): String =
+        if (idle.todayMinutes > 0) {
+            context.getString(
+                R.string.notif_idle_today_short,
+                Time.formatMinutes(
+                    idle.todayMinutes,
+                    context.getString(R.string.unit_m),
+                    context.getString(R.string.unit_h),
+                ),
+            )
+        } else {
+            context.getString(R.string.notif_idle_today_none_short)
+        }
 
     /**
      * "45m", "2h 15m", "3 days" — how long the forest has been still.

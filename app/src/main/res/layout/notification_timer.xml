@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  The collapsed running-timer notification.
+  The collapsed clock notification, shared by the running timer and by the
+  "nothing is growing" nudge — which counts up from the last session and is
+  just as much a stopwatch worth reading.
 
   The platform's own template draws the elapsed time in the header, at the size
   of a timestamp, because to it that is what it is. For a focus timer it is the

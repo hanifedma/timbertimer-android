@@ -248,6 +248,9 @@
     <string name="notif_idle_none_today">오늘은 아직 자란 게 없어요. 짧은 세션도 충분해요.</string>
     <string name="notif_idle_progress">오늘 %1$s 집중했어요. 나무를 하나 더 심어볼까요?</string>
     <string name="notif_idle_action">집중 시작</string>
+    <string name="notif_idle_clock_label">마지막 세션 이후</string>
+    <string name="notif_idle_today_short">오늘 %1$s</string>
+    <string name="notif_idle_today_none_short">오늘은 아직 없어요</string>
     <plurals name="notif_idle_days">
         <item quantity="other">%1$d일</item>
     </plurals>

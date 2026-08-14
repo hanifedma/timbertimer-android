@@ -251,6 +251,10 @@
     <string name="notif_idle_none_today">Nothing grown today yet. Even a short session counts.</string>
     <string name="notif_idle_progress">%1$s focused today. Ready to plant another tree?</string>
     <string name="notif_idle_action">Start focusing</string>
+    <!-- Labels the big count-up clock, which is otherwise just a number. -->
+    <string name="notif_idle_clock_label">since your last session</string>
+    <string name="notif_idle_today_short">%1$s today</string>
+    <string name="notif_idle_today_none_short">nothing today yet</string>
     <plurals name="notif_idle_days">
         <item quantity="one">%1$d day</item>
         <item quantity="other">%1$d days</item>
