@@ -42,7 +42,6 @@ import com.example.timbertimer.core.Time
 import com.example.timbertimer.core.groveTreeScale
 import com.example.timbertimer.data.model.FocusRecord
 import com.example.timbertimer.data.model.ProjectBook
-import com.example.timbertimer.data.model.RecordStatus
 import com.example.timbertimer.ui.GroveView
 import com.example.timbertimer.ui.components.Panel
 import com.example.timbertimer.ui.components.ProjectSummary
@@ -80,7 +79,7 @@ fun ForestScreen(
     val rangeStart: Long
     val rangeEnd: Long
     when (view) {
-        GroveView.TODAY -> {
+        GroveView.DAY -> {
             rangeStart = Time.startOfDay(anchor)
             rangeEnd = Time.addDays(rangeStart, 1)
         }
@@ -97,20 +96,20 @@ fun ForestScreen(
     }
 
     // A tree belongs to the day it was planted on, which is when it ended.
-    val inRange = remember(records, rangeStart, rangeEnd) {
+    // Every record grew one: a session has no outcome to fall short of, so
+    // nothing is left out of the forest.
+    val planted = remember(records, rangeStart, rangeEnd) {
         records
             .filter { (it.endedAt.takeIf { end -> end > 0 } ?: it.startedAt) in rangeStart until rangeEnd }
             .sortedBy { it.startedAt }
     }
-    // Trees come from completed sessions — an abandoned one grows nothing — but
-    // the time it took still counts toward the totals.
-    val planted = inRange.filter { it.status == RecordStatus.COMPLETED }
-    val focusMinutes = inRange.filterNot { it.isRest }.sumOf { it.actualMinutes }
-    val restMinutes = inRange.filter { it.isRest }.sumOf { it.actualMinutes }
-    val totals = remember(inRange, book) { projectTotals(inRange, book) }
+    val focusMinutes = planted.filterNot { it.isRest }.sumOf { it.actualMinutes }
+    val restMinutes = planted.filter { it.isRest }.sumOf { it.actualMinutes }
+    val totals = remember(planted, book) { projectTotals(planted, book) }
 
+    val isToday = rangeStart == Time.startOfDay(System.currentTimeMillis())
     val rangeLabel = when (view) {
-        GroveView.TODAY -> Time.todayLabel(rangeStart, locale)
+        GroveView.DAY -> Time.todayLabel(rangeStart, locale)
         GroveView.WEEK -> Time.weekRangeLabel(rangeStart, locale)
         GroveView.MONTH -> Time.monthLabel(rangeStart, locale)
     }
@@ -125,21 +124,22 @@ fun ForestScreen(
         item(span = { GridItemSpan(maxLineSpan) }) {
             Panel(
                 kicker = stringResource(
-                    when (view) {
-                        GroveView.TODAY -> R.string.grove_today
-                        GroveView.WEEK -> R.string.grove_weekly
-                        GroveView.MONTH -> R.string.grove_monthly
+                    when {
+                        view == GroveView.WEEK -> R.string.grove_weekly
+                        view == GroveView.MONTH -> R.string.grove_monthly
+                        isToday -> R.string.grove_today
+                        else -> R.string.grove_daily
                     }
                 ),
                 title = rangeLabel,
             ) {
                 SegmentedRow(
-                    options = listOf(GroveView.TODAY, GroveView.WEEK, GroveView.MONTH),
+                    options = listOf(GroveView.DAY, GroveView.WEEK, GroveView.MONTH),
                     selected = view,
                     label = {
                         stringResource(
                             when (it) {
-                                GroveView.TODAY -> R.string.grove_view_today
+                                GroveView.DAY -> R.string.grove_view_day
                                 GroveView.WEEK -> R.string.grove_view_week
                                 GroveView.MONTH -> R.string.grove_view_month
                             }
@@ -227,10 +227,11 @@ fun ForestScreen(
                 Panel {
                     Text(
                         text = stringResource(
-                            when (view) {
-                                GroveView.TODAY -> R.string.grove_empty_today
-                                GroveView.WEEK -> R.string.grove_empty_week
-                                GroveView.MONTH -> R.string.grove_empty_month
+                            when {
+                                view == GroveView.WEEK -> R.string.grove_empty_week
+                                view == GroveView.MONTH -> R.string.grove_empty_month
+                                isToday -> R.string.grove_empty_today
+                                else -> R.string.grove_empty_day
                             }
                         ),
                         style = MaterialTheme.typography.bodyMedium,

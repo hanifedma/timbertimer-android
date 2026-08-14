@@ -61,24 +61,19 @@ object Palette {
         return Hsl(hue, saturation * 100f, lightness * 100f)
     }
 
-    /**
-     * The four colours a tree is drawn with, derived from its project's colour.
-     *
-     * [muted] is what an abandoned session (and its wilted tree) uses: the
-     * project's colour is still recognisable, just drained of life.
-     */
-    fun treePalette(color: String, muted: Boolean = false): TreePaletteSpec {
+    /** The four colours a tree is drawn with, derived from its project's colour. */
+    fun treePalette(color: String): TreePaletteSpec {
         val base = hsl(color)
         val h = base.hue
-        val s = if (muted) base.saturationPercent * 0.34f else base.saturationPercent
-        val l = if (muted) min(64f, base.lightnessPercent + 6f) else base.lightnessPercent
+        val s = base.saturationPercent
+        val l = base.lightnessPercent
         // Pull the bark toward brown while keeping a hint of the project's hue.
         val barkHue = h * 0.22f + 28f * 0.78f
         return TreePaletteSpec(
             leafA = css(h, s, (l + 6f).coerceIn(26f, 74f)),
             leafB = css(h + 8f, s * 0.92f, (l - 20f).coerceIn(14f, 52f)),
-            barkA = css(barkHue, if (muted) 16f else 34f, if (muted) 44f else 46f),
-            barkB = css(barkHue, if (muted) 14f else 30f, 30f),
+            barkA = css(barkHue, 34f, 46f),
+            barkB = css(barkHue, 30f, 30f),
         )
     }
 

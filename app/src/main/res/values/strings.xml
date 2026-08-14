@@ -24,9 +24,6 @@
     <string name="field_custom">Custom</string>
     <string name="field_tree">Tree</string>
     <string name="field_started">Started</string>
-    <string name="field_status">Status</string>
-    <string name="field_goal_minutes">Goal minutes</string>
-    <string name="field_actual_minutes">Actual minutes</string>
     <string name="field_minutes">minutes</string>
     <string name="timer_ready">Ready</string>
     <string name="timer_growing">Growing</string>
@@ -44,7 +41,6 @@
     <string name="rest_start">Start rest</string>
     <string name="rest_finish">Finish rest</string>
     <string name="rest_record_title">Rest</string>
-    <string name="record_rested">Rested</string>
     <string name="toast_rest_planted">Rest planted a wilted tree.</string>
     <string name="toast_rest_discarded">Rest was too short to plant.</string>
 
@@ -68,15 +64,7 @@
     <string name="records_empty">No records yet.</string>
     <string name="stats_today">Today</string>
     <string name="stats_total">Total</string>
-    <string name="filter_all">All</string>
-    <string name="filter_completed">Completed</string>
-    <string name="filter_abandoned">Abandoned</string>
-    <string name="status_completed">Completed</string>
-    <string name="status_abandoned">Abandoned</string>
-    <string name="record_planted">Planted</string>
-    <string name="record_abandoned">Abandoned</string>
     <string name="metric_focused">%1$dm focused</string>
-    <string name="metric_goal">%1$dm goal</string>
     <string name="metric_focused_text">%1$s focused</string>
     <string name="action_edit">Edit</string>
     <string name="action_delete">Delete</string>
@@ -89,13 +77,15 @@
     <string name="grove_weekly">Weekly forest</string>
     <string name="grove_monthly">Monthly forest</string>
     <string name="grove_today">Today\'s forest</string>
-    <string name="grove_view_today">Today</string>
+    <string name="grove_daily">A day\'s forest</string>
+    <string name="grove_view_day">Day</string>
     <string name="grove_view_week">Week</string>
     <string name="grove_view_month">Month</string>
     <string name="grove_current">Current</string>
     <string name="grove_previous">Previous</string>
     <string name="grove_next">Next</string>
     <string name="grove_empty_today">No trees planted today.</string>
+    <string name="grove_empty_day">No trees planted on this day.</string>
     <string name="grove_empty_week">No trees planted this week.</string>
     <string name="grove_empty_month">No trees planted this month.</string>
     <string name="grove_focused">%1$s focused</string>
@@ -178,7 +168,6 @@
     <string name="toast_session_started">Session started.</string>
     <string name="toast_stopwatch_started">Stopwatch started.</string>
     <string name="toast_session_planted">Session planted.</string>
-    <string name="toast_session_abandoned">Session recorded as abandoned.</string>
     <string name="toast_timer_finished_elsewhere">Timer already finished on another device.</string>
     <string name="toast_record_saved">Record saved.</string>
     <string name="toast_record_deleted">Record deleted.</string>
@@ -233,7 +222,6 @@
     <string name="notif_rest_title">Rest</string>
     <string name="notif_rest_text">Resting</string>
     <string name="notif_action_finish">Finish</string>
-    <string name="notif_action_give_up">Give up</string>
     <string name="notif_done_title">Session planted 🌲</string>
     <string name="notif_done_text">%1$s — %2$s focused. A %3$s joined your forest.</string>
     <string name="settings_background_sync">Keep syncing in the background</string>

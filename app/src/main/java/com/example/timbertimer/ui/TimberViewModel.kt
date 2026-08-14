@@ -16,7 +16,6 @@ import com.example.timbertimer.data.model.FocusRecord
 import com.example.timbertimer.data.model.Limits
 import com.example.timbertimer.data.model.Project
 import com.example.timbertimer.data.model.Projects
-import com.example.timbertimer.data.model.RecordStatus
 import com.example.timbertimer.data.model.TimerMode
 import com.example.timbertimer.data.model.TreeSpecies
 import com.example.timbertimer.data.remote.GoogleSignIn
@@ -35,7 +34,7 @@ import java.util.UUID
 import kotlin.math.roundToLong
 
 /** Which forest window the user is looking at. */
-enum class GroveView { TODAY, WEEK, MONTH }
+enum class GroveView { DAY, WEEK, MONTH }
 
 /** The focus form, kept apart from the running timer it may go on to create. */
 data class FocusForm(
@@ -46,23 +45,21 @@ data class FocusForm(
 )
 
 data class GroveState(
-    val view: GroveView = GroveView.TODAY,
+    val view: GroveView = GroveView.DAY,
     /** Start of the day, week or month being shown. */
     val anchor: Long = Time.startOfDay(System.currentTimeMillis()),
 )
 
-data class RecordFilter(
-    val query: String = "",
-    val status: RecordStatus? = null,
-)
+data class RecordFilter(val query: String = "")
 
 /**
  * The add/edit sheet's fields.
  *
  * Times are held as instants rather than text: they are set with the platform's
  * own date and time pickers, and the calendar seeds them from wherever it was
- * tapped, so there is never a half-typed value to preserve. Only the goal is
- * free text, because a box bound to an Int cannot be emptied while retyping.
+ * tapped, so there is never a half-typed value to preserve. How long the record
+ * is, is the gap between the two — never a number typed separately, because two
+ * fields that can disagree eventually will.
  */
 data class RecordEditor(
     val id: String?,
@@ -70,8 +67,6 @@ data class RecordEditor(
     val projectId: String,
     val startedAt: Long,
     val endedAt: Long,
-    val status: RecordStatus,
-    val goalMinutes: String,
 ) {
     val minutes: Int
         get() = ((endedAt - startedAt) / 60_000L).coerceIn(0L, Limits.MINUTES_MAX.toLong()).toInt()
@@ -352,7 +347,7 @@ class TimberViewModel(
         _grove.value = GroveState(
             view = view,
             anchor = when (view) {
-                GroveView.TODAY -> Time.startOfDay(nowMillis)
+                GroveView.DAY -> Time.startOfDay(nowMillis)
                 GroveView.WEEK -> Time.startOfWeek(nowMillis)
                 GroveView.MONTH -> Time.startOfMonth(nowMillis)
             },
@@ -362,7 +357,7 @@ class TimberViewModel(
     fun shiftGrove(direction: Int) {
         val state = _grove.value
         _grove.value = when (state.view) {
-            GroveView.TODAY -> state.copy(anchor = Time.addDays(state.anchor, direction.toLong()))
+            GroveView.DAY -> state.copy(anchor = Time.addDays(state.anchor, direction.toLong()))
             GroveView.WEEK -> state.copy(anchor = Time.addDays(state.anchor, direction * 7L))
             GroveView.MONTH -> state.copy(
                 anchor = Time.startOfMonth(Time.addMonths(state.anchor, direction.toLong()))
@@ -458,18 +453,12 @@ class TimberViewModel(
         _filter.value = _filter.value.copy(query = query)
     }
 
-    fun setStatusFilter(status: RecordStatus?) {
-        _filter.value = _filter.value.copy(status = status)
-    }
-
     /** Searching covers the project name too, now that it is part of a record. */
     fun visibleRecords(): List<FocusRecord> {
-        val (query, status) = _filter.value
-        val needle = query.trim().lowercase()
+        val needle = _filter.value.query.trim().lowercase()
         val book = projects.value
         return records.value
             .asSequence()
-            .filter { status == null || it.status == status }
             .filter {
                 needle.isEmpty() ||
                     "${it.title} ${book[it.projectId].name}".lowercase().contains(needle)
@@ -499,8 +488,6 @@ class TimberViewModel(
                     ?: Projects.DEFAULT_ID,
                 startedAt = start,
                 endedAt = start + length * 60_000L,
-                status = RecordStatus.COMPLETED,
-                goalMinutes = length.toString(),
             )
         } else {
             RecordEditor(
@@ -509,8 +496,6 @@ class TimberViewModel(
                 projectId = record.projectId,
                 startedAt = record.startedAt,
                 endedAt = maxOf(record.endedAt, record.startedAt),
-                status = record.status,
-                goalMinutes = record.durationMinutes.toString(),
             )
         }
     }
@@ -536,24 +521,17 @@ class TimberViewModel(
         // on the calendar is nameable with one tap and no typing.
         val title = RecordMapper.cleanTitle(editor.title.ifBlank { project.name })
         val actual = editor.minutes
-        val goal = RecordMapper.cleanMinutes(
-            editor.goalMinutes.toIntOrNull(),
-            if (actual > 0) actual else 1,
-            1,
-        )
 
         val record = FocusRecord(
             id = editor.id ?: UUID.randomUUID().toString(),
             title = title,
             projectId = editor.projectId,
-            durationMinutes = goal,
             actualMinutes = actual,
-            status = editor.status,
             startedAt = editor.startedAt,
             // Stored as exactly the minutes we keep, so the calendar block and
             // the "focused" figure can never disagree.
             endedAt = editor.startedAt + actual * 60_000L,
-            treeKind = RecordMapper.pickTreeKind(project, editor.status),
+            treeKind = RecordMapper.pickTreeKind(project),
             createdAt = System.currentTimeMillis(),
             updatedAt = System.currentTimeMillis(),
         )

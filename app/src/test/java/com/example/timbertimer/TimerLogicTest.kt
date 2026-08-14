@@ -8,7 +8,6 @@ import com.example.timbertimer.data.model.Limits
 import com.example.timbertimer.data.model.Project
 import com.example.timbertimer.data.model.ProjectBook
 import com.example.timbertimer.data.model.Projects
-import com.example.timbertimer.data.model.RecordStatus
 import com.example.timbertimer.data.model.TimerMode
 import com.example.timbertimer.data.model.TreeSpecies
 import com.example.timbertimer.data.remote.FocusSessionRow
@@ -118,33 +117,20 @@ class TimerLogicTest {
     }
 
     @Test
-    fun `an abandoned session always wilts, whatever its project grows`() {
-        val project = project("work", tree = TreeSpecies.PALM.id)
-        assertEquals(
-            TreeSpecies.WILTED.label,
-            RecordMapper.pickTreeKind(project, RecordStatus.ABANDONED),
-        )
-        assertEquals(
-            TreeSpecies.WILTED.label,
-            RecordMapper.resolveTreeKind("palm tree", RecordStatus.ABANDONED),
-        )
-    }
-
-    @Test
-    fun `a completed session plants whatever its project grows`() {
+    fun `a session plants whatever its project grows`() {
         assertEquals(
             TreeSpecies.PALM.label,
-            RecordMapper.pickTreeKind(project("work", TreeSpecies.PALM.id), RecordStatus.COMPLETED),
+            RecordMapper.pickTreeKind(project("work", TreeSpecies.PALM.id)),
         )
         // Rest legitimately grows the wilted sprout, which is not a "choosable"
         // species — it still has to come through.
         assertEquals(
             TreeSpecies.WILTED.label,
-            RecordMapper.pickTreeKind(
-                Projects.builtIn(Projects.REST_ID, 0L),
-                RecordStatus.COMPLETED,
-            ),
+            RecordMapper.pickTreeKind(Projects.builtIn(Projects.REST_ID, 0L)),
         )
+        assertEquals(TreeSpecies.WILTED.label, RecordMapper.resolveTreeKind("wilted sprout"))
+        // A species this build does not know is redrawn from its project anyway.
+        assertEquals(TreeSpecies.PINE.label, RecordMapper.resolveTreeKind("young sprout"))
     }
 
     @Test
@@ -153,9 +139,7 @@ class TimerLogicTest {
             id = "r1",
             title = "study",
             projectId = "p1",
-            durationMinutes = 25,
             actualMinutes = 25,
-            status = "completed",
             startedAt = "2026-07-31T10:00:00Z",
             endedAt = "2026-07-31T10:25:00Z",
             treeKind = "palm tree",
@@ -168,38 +152,33 @@ class TimerLogicTest {
 
     @Test
     fun `a row that carries a project keeps it`() {
-        assertEquals(
-            "t:anything",
-            Projects.resolveId("t:anything", RecordStatus.COMPLETED, "pine tree", "whatever"),
-        )
+        assertEquals("t:anything", Projects.resolveId("t:anything", null, "pine tree", "whatever"))
     }
 
     @Test
     fun `a record written before projects existed is mapped by its shape`() {
-        // A completed wilted tree was a rest.
+        // A wilted tree that was not abandoned was a rest.
         assertEquals(
             Projects.REST_ID,
-            Projects.resolveId(null, RecordStatus.COMPLETED, TreeSpecies.WILTED.label, "Rest"),
+            Projects.resolveId(null, "completed", TreeSpecies.WILTED.label, "Rest"),
+        )
+        // Including a row that carries no status at all, which is every row the
+        // database has had since the column was dropped.
+        assertEquals(
+            Projects.REST_ID,
+            Projects.resolveId(null, null, TreeSpecies.WILTED.label, "Rest"),
         )
         // Anything else keys off its title, case- and space-insensitively.
-        assertEquals(
-            "t:deep focus",
-            Projects.resolveId(null, RecordStatus.COMPLETED, "pine tree", "  Deep Focus "),
-        )
-        assertEquals(
-            "t:deep focus",
-            Projects.resolveId(null, RecordStatus.COMPLETED, "pine tree", ""),
-        )
-        // An abandoned session wilts too, but it was never a rest.
+        assertEquals("t:deep focus", Projects.resolveId(null, null, "pine tree", "  Deep Focus "))
+        assertEquals("t:deep focus", Projects.resolveId(null, null, "pine tree", ""))
+        // A session this device saved as abandoned wilted too, but it was never
+        // a rest — which is the one thing that old column is still read for.
         assertEquals(
             "t:study",
-            Projects.resolveId(null, RecordStatus.ABANDONED, TreeSpecies.WILTED.label, "study"),
+            Projects.resolveId(null, "abandoned", TreeSpecies.WILTED.label, "study"),
         )
         // A blank id is not an id.
-        assertEquals(
-            "t:study",
-            Projects.resolveId("  ", RecordStatus.COMPLETED, "pine tree", "study"),
-        )
+        assertEquals("t:study", Projects.resolveId("  ", null, "pine tree", "study"))
     }
 
     @Test
@@ -246,12 +225,6 @@ class TimerLogicTest {
         // The record was planted as a pine; its project now grows bamboo.
         val record = record(projectId = "work", treeKind = TreeSpecies.PINE.label)
         assertEquals(TreeSpecies.BAMBOO, book.speciesFor(record))
-
-        // An abandoned one wilts regardless.
-        assertEquals(
-            TreeSpecies.WILTED,
-            book.speciesFor(record.copy(status = RecordStatus.ABANDONED)),
-        )
     }
 
     @Test
@@ -413,14 +386,11 @@ class TimerLogicTest {
     private fun record(
         projectId: String,
         treeKind: String = TreeSpecies.PINE.label,
-        status: RecordStatus = RecordStatus.COMPLETED,
     ) = com.example.timbertimer.data.model.FocusRecord(
         id = "r",
         title = "study",
         projectId = projectId,
-        durationMinutes = 25,
         actualMinutes = 25,
-        status = status,
         startedAt = 0L,
         endedAt = 25 * 60_000L,
         treeKind = treeKind,

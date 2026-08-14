@@ -91,13 +91,20 @@ object Projects {
 
     /**
      * Which project a row belongs to. Rows written since projects exist carry
-     * the id; older ones are mapped by their shape — a completed wilted tree was
-     * a rest, anything else keys off its title.
+     * the id; older ones are mapped by their shape — a wilted tree that was not
+     * an abandoned session was a rest, anything else keys off its title.
+     *
+     * [legacyStatus] is a column no record carries any more. It survives as a
+     * parameter to read rows saved by a version that did — the ones still in
+     * this device's own storage — because it is the only thing that tells an old
+     * rest apart from an old abandoned session. Cloud rows had that answer
+     * written into `project_id` by the migration in `docs/supabase-schema.sql`
+     * before the column was dropped, so they never reach the second line.
      */
-    fun resolveId(projectId: String?, status: RecordStatus, treeKind: String?, title: String?): String {
+    fun resolveId(projectId: String?, legacyStatus: String?, treeKind: String?, title: String?): String {
         val stored = projectId?.trim().orEmpty()
         if (stored.isNotEmpty()) return stored
-        if (status == RecordStatus.COMPLETED && treeKind == TreeSpecies.WILTED.label) return REST_ID
+        if (legacyStatus != "abandoned" && treeKind == TreeSpecies.WILTED.label) return REST_ID
         return legacyIdForTitle(title)
     }
 
@@ -194,10 +201,9 @@ class ProjectBook(projects: List<Project>) {
      * record is the fallback for one whose project has been deleted.
      */
     fun speciesFor(record: FocusRecord): TreeSpecies {
-        if (record.status == RecordStatus.ABANDONED) return TreeSpecies.WILTED
         val project = projectFor(record)
         if (!project.missing) return project.species
-        return TreeSpecies.byLabelOrId(record.treeKind) ?: TreeSpecies.PINE
+        return record.storedSpecies
     }
 
     fun contains(id: String?): Boolean = id != null && byId.containsKey(id)

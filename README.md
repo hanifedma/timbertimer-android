@@ -27,20 +27,20 @@ Everything the web app does, plus what only a phone can:
 
 | | |
 |---|---|
-| **Countdown & stopwatch** | Finishing a countdown early records an abandoned session, exactly as on the web. |
+| **Countdown & stopwatch** | You still choose how long a countdown runs, but that goal is not written onto the record it leaves behind. A finished session is just when it ran and for how long, so ending one early is not an outcome the history remembers. |
 | **Projects** | Every record belongs to one, and the project owns its colour and its tree. Name a new project and both are picked for you; recolour it and its whole forest changes with it. |
 | **Calendar** | A day grid showing 1–7 days at once, zoomable by pinch. Tap empty space to add a record, hold a block to drag it to another time or another day, or grab its top or bottom edge to change when it started or ended. A drag is read back to you before it is saved, so a block nudged by accident costs nothing. |
 | **Time by project** | A donut and a breakdown of where the day's, week's or month's hours actually went, in each project's colour. |
 | **Tasks remember their project** | Track "wash dishes" under Errands once and choosing that task picks Errands again by itself, on any device. |
 | **A tree per project** | Seven species, chosen by tapping the tree rather than reading a dropdown. Records are drawn with whatever their project grows now, so changing it re-plants the forest. |
-| **Forest** | Today / week / month, with each tree drawn at the size its session earned and in its project's colour. |
+| **Forest** | Day / week / month, each steppable backwards, with every tree drawn at the size its session earned and in its project's colour. |
 | **Rest stopwatch** | Rest is a project like any other, so a rest can also be added by hand; rests under a minute are dropped. |
 | **To-do list** | Drag by the grip handle to reorder, synced when signed in. |
-| **Focus history** | Searchable, filterable, editable, with today/total stats. |
+| **Focus history** | Searchable, editable, with today/total stats. |
 | **Google sync** | The same account, the same five tables, the same rows — through Android's own account sheet, so the prompt names this app rather than a Supabase address. |
 | **Light / dark / system**, **English / 한국어** | Switchable in Settings. |
 | **Runs in the background** | A foreground service keeps the countdown alive and on the lock screen — and, with background sync on, keeps this device listening for changes even with the app closed. Starts itself after a reboot. |
-| **Notifications** | Live countdown in the shade, Finish and Give up actions, an alert with a buzz when a session lands, and a quiet nudge when you leave the app with nothing running. |
+| **Notifications** | Live countdown in the shade with a Finish action, an alert with a buzz when a session lands, and a quiet nudge when you leave the app with nothing running. |
 | **Works offline** | Local-first, with an outbox so a finished session is never lost to a dead network. |
 | **Home screen widget** | Your tasks on the wallpaper. Tick one off in place; tap anything else to open the app on the To-Do tab. |
 | **Live sync** | A Supabase Realtime socket, so a timer started on another device appears here at once instead of at the next poll. |
@@ -56,12 +56,17 @@ app's redirect has to be allow-listed once, in the same dashboard the website us
 Without it Supabase refuses the redirect and sends the browser to the website
 instead, so sign-in never comes back to the app.
 
-**One thing does need changing since projects arrived.** Re-run all of the web
-repo's `docs/supabase-schema.sql` in the SQL editor — it is safe to re-run, and
-it is what adds the `projects` table and the `project_id` columns. Until then the
-app still works: projects stay on this device, records are grouped by their title
-as before, and nothing is lost — they simply do not carry their project to the
-cloud.
+**Re-run the schema before installing this version.** Paste all of the web repo's
+`docs/supabase-schema.sql` into the SQL editor and run it. A record no longer
+stores a goal or an outcome, so `focus_sessions.duration_minutes` and
+`focus_sessions.status` are gone — and both were `not null`, so a client that has
+stopped writing them cannot save a session until the script has run. It is safe
+to re-run, and it does the migration in the right order: it writes each
+pre-projects record's project down first (the last thing `status` was needed
+for), then drops the columns. `active_focus_timers` is untouched — a running
+countdown still needs to know when it ends. The same script is what adds the
+`projects` table and the `project_id` columns, so a database that never had those
+gets them here too.
 
 ### Signing in without leaving the app (optional, recommended)
 
@@ -170,9 +175,9 @@ app's green, the task above it, the goal below, and the progress bar under that.
 
 `DecoratedCustomViewStyle` is what keeps this from being a step backwards. The
 platform still draws the header, the app name, the expander and the action
-buttons, so Finish and Give up look and behave exactly as they always did, and
-only the middle is ours — rather than a fully custom notification that would have
-had to reimplement all of it, badly, and differently on every OEM skin.
+button, so Finish looks and behaves exactly as it always did, and only the middle
+is ours — rather than a fully custom notification that would have had to
+reimplement all of it, badly, and differently on every OEM skin.
 
 The clock still ticks by itself. A RemoteViews `Chronometer` counts from
 `SystemClock.elapsedRealtime()` rather than the wall clock, so the target instant
@@ -270,7 +275,7 @@ there is width for it.
 ```bash
 ./gradlew assembleDebug      # app/build/outputs/apk/debug/
 ./gradlew assembleRelease    # signed, if keystore.properties is present
-./gradlew testDebugUnitTest  # 55 tests
+./gradlew testDebugUnitTest  # 53 tests
 ```
 
 `assembleRelease` signs the APK if a `keystore.properties` sits beside this file,

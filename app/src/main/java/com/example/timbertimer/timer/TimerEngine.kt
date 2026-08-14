@@ -14,7 +14,6 @@ import com.example.timbertimer.data.model.ActiveTimer
 import com.example.timbertimer.data.model.FocusRecord
 import com.example.timbertimer.data.model.Limits
 import com.example.timbertimer.data.model.Projects
-import com.example.timbertimer.data.model.RecordStatus
 import com.example.timbertimer.data.model.RestTimer
 import com.example.timbertimer.data.model.TimerMode
 import kotlinx.coroutines.CoroutineScope
@@ -30,7 +29,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.util.UUID
-import kotlin.math.max
 import kotlin.math.roundToLong
 
 /**
@@ -298,25 +296,17 @@ class TimerEngine(
         if (repository.pushCloudTimer(timer)) markSynced()
     }
 
-    /** The Finish button: a countdown that has not run out is an abandoned one. */
-    suspend fun finish() {
-        val timer = _timer.value ?: return
-        val status = when {
-            timer.mode == TimerMode.STOPWATCH -> RecordStatus.COMPLETED
-            timer.remainingSeconds() <= 0L -> RecordStatus.COMPLETED
-            else -> RecordStatus.ABANDONED
-        }
-        complete(status)
-    }
-
-    suspend fun giveUp() {
-        if (_timer.value == null) return
-        complete(RecordStatus.ABANDONED)
-    }
+    /**
+     * The Finish button.
+     *
+     * A countdown that has not run out is not an abandoned session any more —
+     * there is no such thing. It simply ran for as long as it ran.
+     */
+    suspend fun finish() = complete()
 
     private suspend fun completeIfDue() {
         val timer = _timer.value ?: return
-        if (timer.isDue()) complete(RecordStatus.COMPLETED)
+        if (timer.isDue()) complete()
     }
 
     /**
@@ -327,7 +317,7 @@ class TimerEngine(
      * record. The other finds it already gone and quietly steps aside, so a
      * session is planted once rather than twice.
      */
-    private suspend fun complete(status: RecordStatus) = completionLock.withLock {
+    private suspend fun complete() = completionLock.withLock {
         val timer = _timer.value ?: return@withLock
         if (completing) return@withLock
         completing = true
@@ -340,44 +330,42 @@ class TimerEngine(
                 return@withLock
             }
 
-            val stopwatch = timer.mode == TimerMode.STOPWATCH
             val elapsedSeconds = timer.elapsedSeconds()
-            val roundedMinutes = (elapsedSeconds / 60.0).roundToLong().toInt()
-            val actual = if (status == RecordStatus.COMPLETED) max(1, roundedMinutes)
-            else max(0, roundedMinutes)
-            val endedAt = System.currentTimeMillis()
+            // A countdown that reached its end is credited in full: a second of
+            // rounding slack should not turn a 25-minute session into 24.
+            // Anything else is the time that actually ran — at least a minute,
+            // so a session leaves a tree rather than a record reading "0m", and
+            // at most a day, which is what the table accepts.
+            val ranOut = timer.mode == TimerMode.COUNTDOWN &&
+                elapsedSeconds >= timer.durationSeconds - 1
+            val rounded = (elapsedSeconds / 60.0).roundToLong().toInt()
+            val actual = (if (ranOut) timer.durationMinutes else rounded)
+                .coerceIn(1, Limits.MINUTES_MAX)
+            val now = System.currentTimeMillis()
 
             val record = FocusRecord(
                 id = UUID.randomUUID().toString(),
                 title = timer.title,
                 projectId = timer.projectId,
-                durationMinutes = if (stopwatch) max(1, actual) else timer.durationMinutes,
-                actualMinutes = when {
-                    stopwatch -> actual
-                    // Reaching the goal is credited in full: a second of rounding
-                    // slack should not turn a 25-minute session into 24.
-                    status == RecordStatus.COMPLETED &&
-                        elapsedSeconds >= timer.durationSeconds - 1 -> timer.durationMinutes
-
-                    else -> actual
-                },
-                status = status,
+                actualMinutes = actual,
                 startedAt = timer.startedAt,
-                endedAt = endedAt,
-                treeKind = RecordMapper.pickTreeKind(repository.projects.value, timer.projectId, status),
-                createdAt = endedAt,
-                updatedAt = endedAt,
+                // The end is stored as exactly the minutes we keep, so the
+                // calendar block and the "focused" figure can never disagree —
+                // the same rule the record sheet and a calendar drag follow.
+                endedAt = timer.startedAt + actual * 60_000L,
+                treeKind = RecordMapper.pickTreeKind(repository.projects.value, timer.projectId),
+                createdAt = now,
+                updatedAt = now,
             )
 
             applyTimer(null)
 
-            if (status == RecordStatus.COMPLETED) {
-                feedback.playCompletion()
-                feedback.vibrateCompletion()
-                notifications.showCompleted(record)
-            } else {
-                feedback.stop()
-            }
+            // The run-in tone is sized to end exactly at zero, so a session
+            // finished during it has to be silenced before the chime lands.
+            feedback.stop()
+            feedback.playCompletion()
+            feedback.vibrateCompletion()
+            notifications.showCompleted(record)
 
             repository.createRecord(record)
             // applyTimer above cleared the notification's timer while this
@@ -387,12 +375,7 @@ class TimerEngine(
             // under an alert that just said "planted".
             postOngoing()
             refreshIdleNudge()
-            _messages.tryEmit(
-                UiMessage.of(
-                    if (status == RecordStatus.COMPLETED) R.string.toast_session_planted
-                    else R.string.toast_session_abandoned
-                )
-            )
+            _messages.tryEmit(UiMessage.of(R.string.toast_session_planted))
         } finally {
             completing = false
         }
@@ -424,26 +407,23 @@ class TimerEngine(
             return
         }
 
-        val endedAt = System.currentTimeMillis()
+        // Capped at a day for the same reason a focus session is: the table
+        // refuses anything longer, and a rest left running is still a record.
+        val capped = minutes.coerceAtMost(Limits.MINUTES_MAX)
+        val now = System.currentTimeMillis()
         repository.createRecord(
             FocusRecord(
                 id = UUID.randomUUID().toString(),
                 title = Limits.REST_TITLE,
                 projectId = Projects.REST_ID,
-                durationMinutes = minutes,
-                actualMinutes = minutes,
-                status = RecordStatus.COMPLETED,
+                actualMinutes = capped,
                 startedAt = rest.startedAt,
-                endedAt = endedAt,
+                endedAt = rest.startedAt + capped * 60_000L,
                 // Rest is a project like any other, so it plants whatever tree
                 // that project grows — a wilted sprout unless it was changed.
-                treeKind = RecordMapper.pickTreeKind(
-                    repository.projects.value,
-                    Projects.REST_ID,
-                    RecordStatus.COMPLETED,
-                ),
-                createdAt = endedAt,
-                updatedAt = endedAt,
+                treeKind = RecordMapper.pickTreeKind(repository.projects.value, Projects.REST_ID),
+                createdAt = now,
+                updatedAt = now,
             )
         )
         _messages.tryEmit(UiMessage.of(R.string.toast_rest_planted))
@@ -467,7 +447,7 @@ class TimerEngine(
                 val timer = _timer.value
                 if (timer != null && !completing) {
                     if (timer.isDue()) {
-                        complete(RecordStatus.COMPLETED)
+                        complete()
                     } else {
                         maybePlayFinishSoon(timer)
                     }

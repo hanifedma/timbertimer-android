@@ -37,19 +37,14 @@ import com.example.timbertimer.core.Time
 import com.example.timbertimer.data.model.FocusRecord
 import com.example.timbertimer.data.model.Limits
 import com.example.timbertimer.data.model.ProjectBook
-import com.example.timbertimer.data.model.RecordStatus
 import com.example.timbertimer.ui.components.Panel
 import com.example.timbertimer.ui.components.ProjectChip
-import com.example.timbertimer.ui.components.SegmentedRow
 import com.example.timbertimer.ui.components.TreeArt
 import com.example.timbertimer.ui.components.ClockFormat
 import com.example.timbertimer.ui.components.currentLocale
 import com.example.timbertimer.ui.components.rememberClockFormat
 import com.example.timbertimer.ui.components.rememberTreePalette
 import java.util.Locale
-
-/** Filter options, with null standing for "all". */
-private val FILTERS = listOf<RecordStatus?>(null, RecordStatus.COMPLETED, RecordStatus.ABANDONED)
 
 /**
  * Focus history: today's and all-time totals, a searchable list, and the ability
@@ -61,9 +56,7 @@ fun RecordsScreen(
     allRecords: List<FocusRecord>,
     book: ProjectBook,
     query: String,
-    status: RecordStatus?,
     onQueryChange: (String) -> Unit,
-    onStatusChange: (RecordStatus?) -> Unit,
     onAdd: () -> Unit,
     onEdit: (FocusRecord) -> Unit,
     onDelete: (FocusRecord) -> Unit,
@@ -76,7 +69,7 @@ fun RecordsScreen(
     val hourUnit = stringResource(R.string.unit_h)
 
     // Rests are planted trees, but they are not focus — they never count here.
-    val focus = allRecords.filter { it.status == RecordStatus.COMPLETED && !it.isRest }
+    val focus = allRecords.filterNot { it.isRest }
     val todayKey = Time.localDateKey(System.currentTimeMillis())
     val todayMinutes = focus
         .filter { Time.localDateKey(if (it.endedAt > 0) it.endedAt else it.startedAt) == todayKey }
@@ -119,24 +112,6 @@ fun RecordsScreen(
                     singleLine = true,
                     leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
                     placeholder = { Text(stringResource(R.string.records_search)) },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-
-                Spacer(Modifier.height(10.dp))
-
-                SegmentedRow(
-                    options = FILTERS,
-                    selected = status,
-                    label = {
-                        stringResource(
-                            when (it) {
-                                null -> R.string.filter_all
-                                RecordStatus.COMPLETED -> R.string.filter_completed
-                                RecordStatus.ABANDONED -> R.string.filter_abandoned
-                            }
-                        )
-                    },
-                    onSelect = onStatusChange,
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
@@ -214,26 +189,21 @@ private fun RecordCard(
         Row(verticalAlignment = Alignment.CenterVertically) {
             TreeArt(
                 species = book.speciesFor(record),
-                palette = rememberTreePalette(project, muted = record.status == RecordStatus.ABANDONED),
+                palette = rememberTreePalette(project),
                 modifier = Modifier.size(44.dp),
             )
             Spacer(Modifier.width(10.dp))
 
             Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = if (isRest && record.title == Limits.REST_TITLE) {
-                            stringResource(R.string.rest_record_title)
-                        } else record.title,
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false),
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    StatusBadge(record, isRest)
-                }
+                Text(
+                    text = if (isRest && record.title == Limits.REST_TITLE) {
+                        stringResource(R.string.rest_record_title)
+                    } else record.title,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
                 Spacer(Modifier.height(3.dp))
                 ProjectChip(project)
                 Spacer(Modifier.height(3.dp))
@@ -249,7 +219,7 @@ private fun RecordCard(
                     text = stringResource(
                         R.string.metric_focused_text,
                         Time.formatMinutes(record.actualMinutes, minuteUnit, hourUnit),
-                    ) + " · " + stringResource(R.string.metric_goal, record.durationMinutes),
+                    ),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -271,25 +241,5 @@ private fun RecordCard(
                 )
             }
         }
-    }
-}
-
-@Composable
-private fun StatusBadge(record: FocusRecord, isRest: Boolean) {
-    val (text, color) = when {
-        isRest -> stringResource(R.string.record_rested) to MaterialTheme.colorScheme.tertiary
-        record.status == RecordStatus.COMPLETED ->
-            stringResource(R.string.record_planted) to MaterialTheme.colorScheme.primary
-
-        else -> stringResource(R.string.record_abandoned) to MaterialTheme.colorScheme.error
-    }
-    Surface(shape = RoundedCornerShape(6.dp), color = color.copy(alpha = 0.16f)) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.labelSmall,
-            color = color,
-            maxLines = 1,
-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-        )
     }
 }

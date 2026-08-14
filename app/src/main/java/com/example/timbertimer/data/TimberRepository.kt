@@ -13,7 +13,6 @@ import com.example.timbertimer.data.model.Note
 import com.example.timbertimer.data.model.Project
 import com.example.timbertimer.data.model.ProjectBook
 import com.example.timbertimer.data.model.Projects
-import com.example.timbertimer.data.model.RecordStatus
 import com.example.timbertimer.data.model.TimerMode
 import com.example.timbertimer.data.model.TreeSpecies
 import com.example.timbertimer.data.remote.ActiveTimerUpsert
@@ -454,7 +453,7 @@ class TimberRepository(
         val moved = affected.associate { record ->
             record.id to record.copy(
                 projectId = target,
-                treeKind = RecordMapper.pickTreeKind(targetProject, record.status),
+                treeKind = RecordMapper.pickTreeKind(targetProject),
                 updatedAt = now,
             )
         }
@@ -937,10 +936,7 @@ class TimberRepository(
      * When the user last stopped working, or null if they never have.
      *
      * Rests do not count: the question this answers is how long the forest has
-     * been still, and a rest is the stillness, not the growth. Abandoned
-     * sessions do count — sitting down and giving up is still the last time
-     * something was attempted, and pretending otherwise would tell someone who
-     * gave up ten minutes ago that they have been idle for days.
+     * been still, and a rest is the stillness, not the growth.
      *
      * Records dated into the future are ignored. The calendar can plan a
      * session, and a plan is not a thing already done; counting one would run
@@ -959,7 +955,7 @@ class TimberRepository(
     fun todayFocusMinutes(): Int {
         val today = Time.localDateKey(System.currentTimeMillis())
         return _records.value
-            .filter { it.status == RecordStatus.COMPLETED && !it.isRest }
+            .filter { !it.isRest }
             .filter { Time.localDateKey(if (it.endedAt > 0) it.endedAt else it.startedAt) == today }
             .sumOf { it.actualMinutes }
     }

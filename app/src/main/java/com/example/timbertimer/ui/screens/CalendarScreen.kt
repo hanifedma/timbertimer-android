@@ -40,7 +40,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -60,7 +59,6 @@ import com.example.timbertimer.core.buildSegments
 import com.example.timbertimer.data.model.ActiveTimer
 import com.example.timbertimer.data.model.FocusRecord
 import com.example.timbertimer.data.model.ProjectBook
-import com.example.timbertimer.data.model.RecordStatus
 import com.example.timbertimer.ui.CalendarState
 import com.example.timbertimer.ui.components.SegmentedRow
 import com.example.timbertimer.ui.components.ClockFormat
@@ -572,9 +570,6 @@ private fun CalendarBlock(
             .height(heightDp)
             .padding(end = 2.dp, bottom = 1.dp)
             .clip(RoundedCornerShape(6.dp))
-            // An abandoned session still occupied the time, so it keeps its
-            // place on the grid — drawn fainter, the way its tree is drawn wilted.
-            .alpha(if (segment.status == RecordStatus.ABANDONED) 0.62f else 1f)
             .background(colors.soft)
             .padding(start = 5.dp, end = 4.dp, top = 2.dp, bottom = 2.dp),
     ) {

@@ -47,10 +47,9 @@ above it, and `core` knows about neither.
 
 ```kotlin
 fun speciesFor(record: FocusRecord): TreeSpecies {
-    if (record.status == RecordStatus.ABANDONED) return TreeSpecies.WILTED
     val project = projectFor(record)
     if (!project.missing) return project.species
-    return TreeSpecies.byLabelOrId(record.treeKind) ?: TreeSpecies.PINE
+    return record.storedSpecies
 }
 ```
 
@@ -68,10 +67,30 @@ the same project without coordinating:
 | a UUID | anything the user made |
 
 `Projects.resolveId` does that mapping at the boundary, so nothing above
-`RecordMapper` ever sees a row without a project. A completed record carrying the
-wilted tree was a rest; anything else keys off its lowercased title. Colours and
-species come from `Seed.mixedHash`, so "Reading" is the same indigo pine on every
-device with nothing written down first.
+`RecordMapper` ever sees a row without a project. A record carrying the wilted
+tree that was not abandoned was a rest; anything else keys off its lowercased
+title. Colours and species come from `Seed.mixedHash`, so "Reading" is the same
+indigo pine on every device with nothing written down first.
+
+## A record remembers the time, not the intention
+
+A session used to carry a goal (`duration_minutes`) and an outcome (`status`,
+either completed or abandoned). Both are gone from `focus_sessions`, and with
+them the wilted tree an abandoned session planted.
+
+The countdown itself is untouched — you still pick how long it runs, it still
+counts down, and it still chimes when it lands. That duration lives on
+`active_focus_timers` for as long as the timer is running, which is the only
+place anything needs it: two devices watching the same countdown have to agree
+on when it ends. What it leaves behind afterwards is just when it ran and for
+how long, so finishing early costs the time you did not spend and nothing else.
+
+One reader of `status` survives, in `Projects.resolveId`. A row written before
+projects existed carries no `project_id`, and a wilted tree on such a row means
+"rest" unless the session was abandoned — so the schema migration writes every
+such row's project down *before* dropping the column. `FocusSessionRow.legacyStatus`
+keeps reading it for the rows an older build of this app left in
+SharedPreferences, which have had no migration.
 
 **The projects table is optional.** `projectsTableMissing`,
 `sessionProjectColumnMissing` and `activeTimerProjectColumnMissing` each latch on
@@ -276,13 +295,14 @@ Two constraints that are easy to trip over:
 
 ## Testing
 
-`./gradlew testDebugUnitTest` — 55 tests, all off-device:
+`./gradlew testDebugUnitTest` — 53 tests, all off-device:
 
 - **`SeedParityTest`** — the hash, the species and colour a name picks, the tree
   palette a colour produces, the readable ink per theme, and the jitter, against
   Node-generated expectations from the web client.
 - **`TimerLogicTest`** — clock-derived timing including the reboot case, the
-  table's clamps, how a pre-projects row is mapped to a project, the built-ins'
+  table's clamps, how a pre-projects row is mapped to a project (with and
+  without the `status` an older build wrote), the built-ins'
   sort order, the deleted-project fallback, Sunday-start weeks, and both
   timestamp shapes Postgres and the web client write. The date picker's
   midnight-UTC round trip is here too: reading it back in the device's own zone

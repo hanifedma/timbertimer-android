@@ -91,7 +91,6 @@ class TimerService : Service() {
 
         when (intent?.action) {
             ACTION_FINISH -> runInApp { container.timerEngine.finish() }
-            ACTION_GIVE_UP -> runInApp { container.timerEngine.giveUp() }
             ACTION_FINISH_REST -> runInApp { container.timerEngine.finishRest() }
         }
 
@@ -212,7 +211,6 @@ class TimerService : Service() {
 
     companion object {
         const val ACTION_FINISH = "com.example.timbertimer.FINISH"
-        const val ACTION_GIVE_UP = "com.example.timbertimer.GIVE_UP"
         const val ACTION_FINISH_REST = "com.example.timbertimer.FINISH_REST"
 
         /** Fast enough that the progress bar tracks, slow enough to be free. */

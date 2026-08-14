@@ -6,7 +6,6 @@ import com.example.timbertimer.core.buildSegments
 import com.example.timbertimer.data.model.ActiveTimer
 import com.example.timbertimer.data.model.FocusRecord
 import com.example.timbertimer.data.model.Projects
-import com.example.timbertimer.data.model.RecordStatus
 import com.example.timbertimer.data.model.TimerMode
 import com.example.timbertimer.data.model.TreeSpecies
 import org.junit.Assert.assertEquals
@@ -35,14 +34,11 @@ class CalendarLayoutTest {
         start: Long,
         minutes: Int,
         projectId: String = Projects.DEFAULT_ID,
-        status: RecordStatus = RecordStatus.COMPLETED,
     ) = FocusRecord(
         id = id,
         title = id,
         projectId = projectId,
-        durationMinutes = minutes,
         actualMinutes = minutes,
-        status = status,
         startedAt = start,
         endedAt = start + minutes * 60_000L,
         treeKind = TreeSpecies.PINE.label,
@@ -197,17 +193,6 @@ class CalendarLayoutTest {
         assertEquals(null, segment.record)
         assertEquals(600f, segment.startMin, 0.01f)
         assertEquals(640f, segment.endMin, 0.01f)
-    }
-
-    @Test
-    fun `an abandoned session keeps its place on the grid`() {
-        val segments = buildSegments(
-            records = listOf(record("gave up", at(today, 9), 20, status = RecordStatus.ABANDONED)),
-            timer = null,
-            dayStarts = days,
-            now = at(today, 12),
-        )
-        assertEquals(RecordStatus.ABANDONED, segments.single().status)
     }
 
     @Test

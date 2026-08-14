@@ -21,14 +21,22 @@ data class FocusSessionRow(
     @SerialName("user_id") val userId: String? = null,
     val title: String = "",
     @SerialName("project_id") val projectId: String? = null,
-    @SerialName("duration_minutes") val durationMinutes: Int = 25,
     @SerialName("actual_minutes") val actualMinutes: Int = 0,
-    val status: String = "completed",
     @SerialName("started_at") val startedAt: String? = null,
     @SerialName("ended_at") val endedAt: String? = null,
     @SerialName("tree_kind") val treeKind: String = "young sprout",
     @SerialName("created_at") val createdAt: String? = null,
     @SerialName("updated_at") val updatedAt: String? = null,
+    /**
+     * Read-only, and never written back.
+     *
+     * The column is gone from the database, but rows saved on this device by an
+     * older build still carry it — and for a row written before projects
+     * existed it is the only thing that tells a rest apart from an abandoned
+     * session. [com.example.timbertimer.data.model.Projects.resolveId] is its
+     * one reader.
+     */
+    @SerialName("status") val legacyStatus: String? = null,
 )
 
 @Serializable
@@ -37,9 +45,7 @@ data class FocusSessionInsert(
     @SerialName("user_id") val userId: String,
     val title: String,
     @SerialName("project_id") val projectId: String,
-    @SerialName("duration_minutes") val durationMinutes: Int,
     @SerialName("actual_minutes") val actualMinutes: Int,
-    val status: String,
     @SerialName("started_at") val startedAt: String,
     @SerialName("ended_at") val endedAt: String,
     @SerialName("tree_kind") val treeKind: String,
@@ -60,9 +66,7 @@ data class FocusSessionInsertLegacy(
     val id: String,
     @SerialName("user_id") val userId: String,
     val title: String,
-    @SerialName("duration_minutes") val durationMinutes: Int,
     @SerialName("actual_minutes") val actualMinutes: Int,
-    val status: String,
     @SerialName("started_at") val startedAt: String,
     @SerialName("ended_at") val endedAt: String,
     @SerialName("tree_kind") val treeKind: String,
@@ -75,9 +79,7 @@ data class FocusSessionInsertLegacy(
 data class FocusSessionUpdate(
     val title: String,
     @SerialName("project_id") val projectId: String,
-    @SerialName("duration_minutes") val durationMinutes: Int,
     @SerialName("actual_minutes") val actualMinutes: Int,
-    val status: String,
     @SerialName("started_at") val startedAt: String,
     @SerialName("ended_at") val endedAt: String,
     @SerialName("tree_kind") val treeKind: String,
@@ -87,9 +89,7 @@ data class FocusSessionUpdate(
 @Serializable
 data class FocusSessionUpdateLegacy(
     val title: String,
-    @SerialName("duration_minutes") val durationMinutes: Int,
     @SerialName("actual_minutes") val actualMinutes: Int,
-    val status: String,
     @SerialName("started_at") val startedAt: String,
     @SerialName("ended_at") val endedAt: String,
     @SerialName("tree_kind") val treeKind: String,

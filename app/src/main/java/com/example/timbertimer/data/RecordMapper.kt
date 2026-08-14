@@ -6,7 +6,6 @@ import com.example.timbertimer.data.model.Limits
 import com.example.timbertimer.data.model.Project
 import com.example.timbertimer.data.model.ProjectBook
 import com.example.timbertimer.data.model.Projects
-import com.example.timbertimer.data.model.RecordStatus
 import com.example.timbertimer.data.model.TreeSpecies
 import com.example.timbertimer.data.remote.FocusSessionInsert
 import com.example.timbertimer.data.remote.FocusSessionRow
@@ -35,19 +34,14 @@ object RecordMapper {
 
     fun normalize(row: FocusSessionRow): FocusRecord {
         val now = System.currentTimeMillis()
-        val duration = cleanMinutes(row.durationMinutes, Limits.DEFAULT_DURATION, 1)
-        val actual = cleanMinutes(row.actualMinutes, duration, 0)
         val title = cleanTitle(row.title)
-        val status = RecordStatus.from(row.status)
         val startedAt = Time.parseIso(row.startedAt) ?: now
-        val treeKind = resolveTreeKind(row.treeKind, status)
+        val treeKind = resolveTreeKind(row.treeKind)
         return FocusRecord(
             id = row.id,
             title = title,
-            projectId = Projects.resolveId(row.projectId, status, treeKind, title),
-            durationMinutes = duration,
-            actualMinutes = actual,
-            status = status,
+            projectId = Projects.resolveId(row.projectId, row.legacyStatus, treeKind, title),
+            actualMinutes = cleanMinutes(row.actualMinutes, 0, 0),
             startedAt = startedAt,
             endedAt = Time.parseIso(row.endedAt) ?: startedAt,
             treeKind = treeKind,
@@ -59,26 +53,19 @@ object RecordMapper {
     /**
      * Keeps the species that was actually stored on this record.
      *
-     * A rest plants a wilted tree even though it completes, and an abandoned
-     * session wilts whatever it once was. Anything unrecognised — a row from an
-     * old schema — falls back to pine, and is redrawn from its project anyway.
+     * Rest plants a wilted tree, which is not one of the choosable species, so
+     * it has to survive as itself. Anything unrecognised — a row from an old
+     * schema — falls back to pine, and is redrawn from its project anyway.
      */
-    fun resolveTreeKind(stored: String?, status: RecordStatus): String {
-        if (status == RecordStatus.ABANDONED) return TreeSpecies.WILTED.label
+    fun resolveTreeKind(stored: String?): String {
         if (stored == TreeSpecies.WILTED.label) return stored
         return TreeSpecies.byLabel(stored)?.label ?: TreeSpecies.PINE.label
     }
 
-    /**
-     * The species to plant: the project's, unless the session was abandoned, in
-     * which case it wilts whatever the project grows.
-     */
-    fun pickTreeKind(project: Project, status: RecordStatus): String =
-        if (status == RecordStatus.ABANDONED) TreeSpecies.WILTED.label
-        else project.species.label
+    /** The species to plant: whatever the project is currently growing. */
+    fun pickTreeKind(project: Project): String = project.species.label
 
-    fun pickTreeKind(book: ProjectBook, projectId: String, status: RecordStatus): String =
-        pickTreeKind(book[projectId], status)
+    fun pickTreeKind(book: ProjectBook, projectId: String): String = pickTreeKind(book[projectId])
 
     // ---------- to the database ----------
 
@@ -87,9 +74,7 @@ object RecordMapper {
         userId = userId,
         title = cleanTitle(record.title),
         projectId = record.projectId,
-        durationMinutes = cleanMinutes(record.durationMinutes, Limits.DEFAULT_DURATION, 1),
-        actualMinutes = cleanMinutes(record.actualMinutes, record.durationMinutes, 0),
-        status = record.status.wire,
+        actualMinutes = cleanMinutes(record.actualMinutes, 0, 0),
         startedAt = Time.toIso(record.startedAt),
         endedAt = Time.toIso(record.endedAt),
         treeKind = record.treeKind,
@@ -102,9 +87,7 @@ object RecordMapper {
         userId = userId,
         title = cleanTitle(record.title),
         projectId = record.projectId,
-        durationMinutes = cleanMinutes(record.durationMinutes, Limits.DEFAULT_DURATION, 1),
-        actualMinutes = cleanMinutes(record.actualMinutes, record.durationMinutes, 0),
-        status = record.status.wire,
+        actualMinutes = cleanMinutes(record.actualMinutes, 0, 0),
         startedAt = Time.toIso(record.startedAt),
         endedAt = Time.toIso(record.endedAt),
         treeKind = record.treeKind,
@@ -112,21 +95,24 @@ object RecordMapper {
         updatedAt = Time.toIso(record.updatedAt),
     )
 
+    /**
+     * A row from the outbox on its way up. It may have been written by a version
+     * that still stored `status`, so the project is resolved here rather than
+     * carried, and the species corrected to one this build still draws.
+     */
     fun toInsert(row: FocusSessionRow, userId: String): FocusSessionInsert {
         val fallbackNow = Time.toIso(System.currentTimeMillis())
-        val status = RecordStatus.from(row.status)
         val title = cleanTitle(row.title)
+        val treeKind = resolveTreeKind(row.treeKind)
         return FocusSessionInsert(
             id = row.id,
             userId = userId,
             title = title,
-            projectId = Projects.resolveId(row.projectId, status, row.treeKind, title),
-            durationMinutes = cleanMinutes(row.durationMinutes, Limits.DEFAULT_DURATION, 1),
-            actualMinutes = cleanMinutes(row.actualMinutes, row.durationMinutes, 0),
-            status = row.status,
+            projectId = Projects.resolveId(row.projectId, row.legacyStatus, treeKind, title),
+            actualMinutes = cleanMinutes(row.actualMinutes, 0, 0),
             startedAt = row.startedAt ?: fallbackNow,
             endedAt = row.endedAt ?: row.startedAt ?: fallbackNow,
-            treeKind = row.treeKind,
+            treeKind = treeKind,
             createdAt = row.createdAt ?: fallbackNow,
             updatedAt = row.updatedAt ?: fallbackNow,
         )
@@ -135,9 +121,7 @@ object RecordMapper {
     fun toUpdate(record: FocusRecord): FocusSessionUpdate = FocusSessionUpdate(
         title = cleanTitle(record.title),
         projectId = record.projectId,
-        durationMinutes = cleanMinutes(record.durationMinutes, Limits.DEFAULT_DURATION, 1),
-        actualMinutes = cleanMinutes(record.actualMinutes, record.durationMinutes, 0),
-        status = record.status.wire,
+        actualMinutes = cleanMinutes(record.actualMinutes, 0, 0),
         startedAt = Time.toIso(record.startedAt),
         endedAt = Time.toIso(record.endedAt),
         treeKind = record.treeKind,

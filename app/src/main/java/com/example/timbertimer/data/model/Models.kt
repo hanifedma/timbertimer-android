@@ -4,8 +4,8 @@ import androidx.annotation.StringRes
 import com.example.timbertimer.R
 
 /**
- * The seven species a focus session can plant, plus the wilted tree an
- * abandoned session or a rest leaves behind.
+ * The seven species a focus session can plant, plus the wilted tree a rest
+ * leaves behind.
  *
  * [label] is what goes into `focus_sessions.tree_kind`, and it is deliberately
  * the English string the web app writes: a record has to mean the same thing on
@@ -20,7 +20,7 @@ enum class TreeSpecies(val id: String, val label: String, @StringRes val display
     KAPOK("kapok", "kapok tree", R.string.tree_kapok),
     MANGROVE("mangrove", "mangrove tree", R.string.tree_mangrove),
 
-    /** Not offered in the picker — it is planted by outcome, never by choice. */
+    /** Not offered in the picker; it is what the Rest project grows by default. */
     WILTED("wilted", "wilted sprout", R.string.tree_wilted);
 
     companion object {
@@ -33,17 +33,6 @@ enum class TreeSpecies(val id: String, val label: String, @StringRes val display
 
         /** Accepts either form, because older rows stored the id in `tree_kind`. */
         fun byLabelOrId(value: String?): TreeSpecies? = byLabel(value) ?: byId(value)
-    }
-}
-
-enum class RecordStatus(val wire: String) {
-    COMPLETED("completed"),
-    ABANDONED("abandoned");
-
-    companion object {
-        /** Anything unrecognised counts as completed, matching the web client. */
-        fun from(value: String?): RecordStatus =
-            if (value == ABANDONED.wire) ABANDONED else COMPLETED
     }
 }
 
@@ -60,6 +49,10 @@ enum class TimerMode(val wire: String) {
 /**
  * One planted tree: a row of `public.focus_sessions`.
  *
+ * A record is a title, a project, when it ran and for how long. It remembers no
+ * goal it was measured against and no outcome it was filed under — the timer's
+ * countdown belongs to [ActiveTimer], and ends with it.
+ *
  * Times are epoch milliseconds here and ISO-8601 at the database boundary.
  */
 data class FocusRecord(
@@ -70,9 +63,7 @@ data class FocusRecord(
      * mapped to one here, so nothing downstream has to know about two shapes.
      */
     val projectId: String,
-    val durationMinutes: Int,
     val actualMinutes: Int,
-    val status: RecordStatus,
     val startedAt: Long,
     val endedAt: Long,
     val treeKind: String,
@@ -93,10 +84,7 @@ data class FocusRecord(
      * unknown — a [ProjectBook] is what decides how a record is actually drawn.
      */
     val storedSpecies: TreeSpecies
-        get() = when (status) {
-            RecordStatus.ABANDONED -> TreeSpecies.WILTED
-            else -> TreeSpecies.byLabelOrId(treeKind) ?: TreeSpecies.PINE
-        }
+        get() = TreeSpecies.byLabelOrId(treeKind) ?: TreeSpecies.PINE
 }
 
 /** One row of `public.notes` — an item on the shared to-do list. */

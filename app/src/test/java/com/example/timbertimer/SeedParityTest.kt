@@ -112,7 +112,6 @@ class SeedParityTest {
         val leafB: Triple<Float, Float, Float>,
         val barkA: Triple<Float, Float, Float>,
         val barkB: Triple<Float, Float, Float>,
-        val mutedLeafA: Triple<Float, Float, Float>,
     )
 
     private val paletteCases = listOf(
@@ -120,37 +119,31 @@ class SeedParityTest {
             "#9e5bd9",
             Triple(272f, 62f, 66f), Triple(280f, 57f, 40f),
             Triple(82f, 34f, 46f), Triple(82f, 30f, 30f),
-            Triple(272f, 21f, 70f),
         ),
         PaletteCase(
             "#0b83d9",
             Triple(205f, 90f, 51f), Triple(213f, 83f, 25f),
             Triple(67f, 34f, 46f), Triple(67f, 30f, 30f),
-            Triple(205f, 31f, 57f),
         ),
         PaletteCase(
             "#2da608",
             Triple(106f, 91f, 40f), Triple(114f, 84f, 14f),
             Triple(45f, 34f, 46f), Triple(45f, 30f, 30f),
-            Triple(106f, 31f, 46f),
         ),
         PaletteCase(
             "#a1866f",
             Triple(28f, 21f, 59f), Triple(36f, 19f, 33f),
             Triple(28f, 34f, 46f), Triple(28f, 30f, 30f),
-            Triple(28f, 7f, 65f),
         ),
         PaletteCase(
             "#8e8e93",
             Triple(240f, 2f, 63f), Triple(248f, 2f, 37f),
             Triple(75f, 34f, 46f), Triple(75f, 30f, 30f),
-            Triple(240f, 1f, 69f),
         ),
         PaletteCase(
             "#c7af14",
             Triple(52f, 82f, 49f), Triple(60f, 75f, 23f),
             Triple(33f, 34f, 46f), Triple(33f, 30f, 30f),
-            Triple(52f, 28f, 55f),
         ),
     )
 
@@ -162,9 +155,6 @@ class SeedParityTest {
             assertHsl("leafB of ${case.color}", case.leafB, palette.leafB)
             assertHsl("barkA of ${case.color}", case.barkA, palette.barkA)
             assertHsl("barkB of ${case.color}", case.barkB, palette.barkB)
-
-            val muted = Palette.treePalette(case.color, muted = true)
-            assertHsl("muted leafA of ${case.color}", case.mutedLeafA, muted.leafA)
         }
     }
 

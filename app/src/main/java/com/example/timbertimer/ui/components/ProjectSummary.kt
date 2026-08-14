@@ -37,8 +37,7 @@ data class ProjectTotal(
 )
 
 /**
- * Time tracked, not trees earned: an abandoned session still cost the time, it
- * just never grew anything, so it counts here.
+ * Time tracked, in each project's own colour.
  */
 fun projectTotals(records: List<FocusRecord>, book: ProjectBook): List<ProjectTotal> {
     val totals = LinkedHashMap<String, ProjectTotal>()

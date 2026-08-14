@@ -27,14 +27,9 @@ data class ProjectColors(
     val soft: Color,
 )
 
-/**
- * The palette a project's trees are painted from.
- *
- * [muted] is what an abandoned session uses: the project's colour is still
- * recognisable, just drained of life.
- */
-fun treePaletteOf(color: String, muted: Boolean = false): TreePalette {
-    val spec = Palette.treePalette(color, muted)
+/** The palette a project's trees are painted from. */
+fun treePaletteOf(color: String): TreePalette {
+    val spec = Palette.treePalette(color)
     return TreePalette(
         leafA = spec.leafA.toColor(),
         leafB = spec.leafB.toColor(),
@@ -44,12 +39,11 @@ fun treePaletteOf(color: String, muted: Boolean = false): TreePalette {
 }
 
 @Composable
-fun rememberTreePalette(color: String, muted: Boolean = false): TreePalette =
-    remember(color, muted) { treePaletteOf(color, muted) }
+fun rememberTreePalette(color: String): TreePalette =
+    remember(color) { treePaletteOf(color) }
 
 @Composable
-fun rememberTreePalette(project: Project, muted: Boolean = false): TreePalette =
-    rememberTreePalette(project.color, muted)
+fun rememberTreePalette(project: Project): TreePalette = rememberTreePalette(project.color)
 
 @Composable
 fun projectColors(color: String): ProjectColors {

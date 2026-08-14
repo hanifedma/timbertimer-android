@@ -2,7 +2,6 @@ package com.example.timbertimer.core
 
 import com.example.timbertimer.data.model.ActiveTimer
 import com.example.timbertimer.data.model.FocusRecord
-import com.example.timbertimer.data.model.RecordStatus
 import kotlin.math.roundToInt
 
 /**
@@ -22,7 +21,6 @@ data class CalendarSegment(
     val record: FocusRecord?,
     val projectId: String,
     val title: String,
-    val status: RecordStatus,
     val running: Boolean,
     val dayIndex: Int,
     val startMillis: Long,
@@ -54,7 +52,6 @@ fun buildSegments(
         val record: FocusRecord?,
         val projectId: String,
         val title: String,
-        val status: RecordStatus,
         val running: Boolean,
         val start: Long,
         val end: Long,
@@ -67,7 +64,6 @@ fun buildSegments(
                     record = record,
                     projectId = record.projectId,
                     title = record.title,
-                    status = record.status,
                     running = false,
                     start = record.startedAt,
                     end = maxOf(record.startedAt, record.endedAt),
@@ -80,7 +76,6 @@ fun buildSegments(
                     record = null,
                     projectId = timer.projectId,
                     title = timer.title,
-                    status = RecordStatus.COMPLETED,
                     running = true,
                     start = timer.startedAt,
                     end = maxOf(timer.startedAt, now),
@@ -107,7 +102,6 @@ fun buildSegments(
                 record = entry.record,
                 projectId = entry.projectId,
                 title = entry.title,
-                status = entry.status,
                 running = entry.running,
                 dayIndex = index,
                 startMillis = from,

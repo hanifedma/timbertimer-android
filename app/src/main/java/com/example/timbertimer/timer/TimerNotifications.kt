@@ -203,18 +203,14 @@ class TimerNotifications(context: Context) {
                 progress = if (countdown) timer.progress() else null,
             )
 
+            // Finish is the only action: ending a countdown early is not a
+            // different outcome any more, so "Give up" would do the same thing
+            // under a word the app no longer means.
             builder.addAction(
                 0,
                 context.getString(R.string.notif_action_finish),
                 serviceAction(TimerService.ACTION_FINISH),
             )
-            if (countdown) {
-                builder.addAction(
-                    0,
-                    context.getString(R.string.notif_action_give_up),
-                    serviceAction(TimerService.ACTION_GIVE_UP),
-                )
-            }
         } else if (rest != null) {
             builder
                 .setContentTitle(context.getString(R.string.notif_rest_title))

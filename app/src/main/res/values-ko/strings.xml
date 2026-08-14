@@ -23,9 +23,6 @@
     <string name="field_custom">직접 입력</string>
     <string name="field_tree">나무</string>
     <string name="field_started">시작 시각</string>
-    <string name="field_status">상태</string>
-    <string name="field_goal_minutes">목표 (분)</string>
-    <string name="field_actual_minutes">실제 (분)</string>
     <string name="field_minutes">분</string>
     <string name="timer_ready">준비됨</string>
     <string name="timer_growing">자라는 중</string>
@@ -43,7 +40,6 @@
     <string name="rest_start">휴식 시작</string>
     <string name="rest_finish">휴식 완료</string>
     <string name="rest_record_title">휴식</string>
-    <string name="record_rested">휴식함</string>
     <string name="toast_rest_planted">휴식이 시든 나무를 심었어요.</string>
     <string name="toast_rest_discarded">휴식이 너무 짧아 심지 않았어요.</string>
 
@@ -67,15 +63,7 @@
     <string name="records_empty">아직 기록이 없어요.</string>
     <string name="stats_today">오늘</string>
     <string name="stats_total">전체</string>
-    <string name="filter_all">전체</string>
-    <string name="filter_completed">완료</string>
-    <string name="filter_abandoned">중단</string>
-    <string name="status_completed">완료</string>
-    <string name="status_abandoned">중단</string>
-    <string name="record_planted">심음</string>
-    <string name="record_abandoned">중단</string>
     <string name="metric_focused">%1$d분 집중</string>
-    <string name="metric_goal">목표 %1$d분</string>
     <string name="metric_focused_text">%1$s 집중</string>
     <string name="action_edit">편집</string>
     <string name="action_delete">삭제</string>
@@ -88,13 +76,15 @@
     <string name="grove_weekly">주간 숲</string>
     <string name="grove_monthly">월간 숲</string>
     <string name="grove_today">오늘의 숲</string>
-    <string name="grove_view_today">오늘</string>
+    <string name="grove_daily">하루의 숲</string>
+    <string name="grove_view_day">일</string>
     <string name="grove_view_week">주</string>
     <string name="grove_view_month">월</string>
     <string name="grove_current">현재</string>
     <string name="grove_previous">이전</string>
     <string name="grove_next">다음</string>
     <string name="grove_empty_today">오늘 심은 나무가 없어요.</string>
+    <string name="grove_empty_day">이 날 심은 나무가 없어요.</string>
     <string name="grove_empty_week">이번 주에 심은 나무가 없어요.</string>
     <string name="grove_empty_month">이번 달에 심은 나무가 없어요.</string>
     <string name="grove_focused">%1$s 집중</string>
@@ -175,7 +165,6 @@
     <string name="toast_session_started">세션을 시작했어요.</string>
     <string name="toast_stopwatch_started">스톱워치를 시작했어요.</string>
     <string name="toast_session_planted">세션을 심었어요.</string>
-    <string name="toast_session_abandoned">세션을 중단으로 기록했어요.</string>
     <string name="toast_timer_finished_elsewhere">다른 기기에서 이미 타이머가 끝났어요.</string>
     <string name="toast_record_saved">기록을 저장했어요.</string>
     <string name="toast_record_deleted">기록을 삭제했어요.</string>
@@ -230,7 +219,6 @@
     <string name="notif_rest_title">휴식</string>
     <string name="notif_rest_text">휴식 중</string>
     <string name="notif_action_finish">완료</string>
-    <string name="notif_action_give_up">포기</string>
     <string name="notif_done_title">세션을 심었어요 🌲</string>
     <string name="notif_done_text">%1$s — %2$s 집중했어요. %3$s(이)가 숲에 합류했어요.</string>
     <string name="settings_background_sync">백그라운드에서 계속 동기화</string>
