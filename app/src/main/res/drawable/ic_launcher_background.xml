@@ -1,8 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   The web app's favicon background, transcribed from assets/canopy-logo.svg:
-  a vertical green gradient. The launcher applies its own corner rounding, so
-  the rect fills the whole viewport rather than carrying the SVG's own radius.
+  a near-black vertical gradient. Flat black would read as a hole on a dark
+  wallpaper, so the tile keeps the faint top-to-bottom fall the green one had —
+  enough to give it an edge, not enough to be a colour of its own. The launcher
+  applies its own corner rounding, so the rect fills the whole viewport rather
+  than carrying the SVG's own radius.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:aapt="http://schemas.android.com/aapt"
@@ -18,8 +21,8 @@
                 android:endX="64"
                 android:endY="128"
                 android:type="linear">
-                <item android:color="#FF3EE06A" android:offset="0" />
-                <item android:color="#FF24A34A" android:offset="1" />
+                <item android:color="#FF141414" android:offset="0" />
+                <item android:color="#FF000000" android:offset="1" />
             </gradient>
         </aapt:attr>
     </path>

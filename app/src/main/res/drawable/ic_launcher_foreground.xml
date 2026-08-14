@@ -14,9 +14,9 @@
   of the visible circle, which is the usual keyline for a shape on a coloured
   background.
 
-  White rather than the near-black of the web favicon: on the green tile it is
-  the higher-contrast pair, and it matches how the other icons on a home screen
-  carry their glyph.
+  Green on the black tile, the same #30d158 the web favicon uses, so the phone's
+  home screen and the browser tab carry the same mark rather than two versions
+  of it.
 
   Doubles as the monochrome icon — themed launchers re-tint the strokes flat, so
   the colour here does not reach that variant.
@@ -35,25 +35,25 @@
         android:translateY="-2.75">
         <path
             android:pathData="M45,101h38"
-            android:strokeColor="#FFFFFFFF"
+            android:strokeColor="#FF30D158"
             android:strokeWidth="7"
             android:strokeLineCap="round"
             android:strokeLineJoin="round" />
         <path
             android:pathData="M62,101c20,-9 3,-23 11,-36"
-            android:strokeColor="#FFFFFFFF"
+            android:strokeColor="#FF30D158"
             android:strokeWidth="7"
             android:strokeLineCap="round"
             android:strokeLineJoin="round" />
         <path
             android:pathData="M60,52c4,3 7,8 8.5,13.5 -7.5,1.5 -13,1.5 -17.5,-1s-8.5,-7 -11,-15c10,-2 16,0 20,2.5z"
-            android:strokeColor="#FFFFFFFF"
+            android:strokeColor="#FF30D158"
             android:strokeWidth="7"
             android:strokeLineCap="round"
             android:strokeLineJoin="round" />
         <path
             android:pathData="M77,40a26,26 0 0 0 -4,15c7,-0.5 12,-2.5 16,-5.5 3.5,-3.5 6,-8.5 6.5,-17 -10,0.5 -15,3.5 -18.5,7.5z"
-            android:strokeColor="#FFFFFFFF"
+            android:strokeColor="#FF30D158"
             android:strokeWidth="7"
             android:strokeLineCap="round"
             android:strokeLineJoin="round" />
