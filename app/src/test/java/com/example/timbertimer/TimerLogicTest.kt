@@ -2,6 +2,7 @@ package com.example.timbertimer
 
 import com.example.timbertimer.core.Time
 import com.example.timbertimer.core.focusGrowthStage
+import com.example.timbertimer.core.lastActivityEndedAt
 import com.example.timbertimer.data.RecordMapper
 import com.example.timbertimer.data.model.ActiveTimer
 import com.example.timbertimer.data.model.Limits
@@ -250,6 +251,58 @@ class TimerLogicTest {
         // An unusable colour and tree fall back to the ones the name would pick.
         assertEquals(Projects.colorForName(project.name), project.color)
         assertEquals(Projects.treeForName(project.name), project.tree)
+    }
+
+    // ---------- how long the forest has been still ----------
+
+    private fun ended(id: String, startedAt: Long, minutes: Int, projectId: String = Projects.DEFAULT_ID) =
+        com.example.timbertimer.data.model.FocusRecord(
+            id = id,
+            title = id,
+            projectId = projectId,
+            actualMinutes = minutes,
+            startedAt = startedAt,
+            endedAt = startedAt + minutes * 60_000L,
+            treeKind = TreeSpecies.PINE.label,
+            createdAt = startedAt,
+            updatedAt = startedAt,
+        )
+
+    @Test
+    fun `a rest counts as time spent, so it resets the idle clock`() {
+        val now = 1_000_000_000_000L
+        val focus = ended("focus", now - 3 * 60 * 60_000L, 25)
+        val rest = ended("rest", now - 40 * 60_000L, 10, Projects.REST_ID)
+
+        // The rest ended half an hour ago; the focus session, three hours.
+        assertEquals(now - 30 * 60_000L, lastActivityEndedAt(listOf(focus, rest), now))
+        // And on its own it still answers, rather than reading as "never".
+        assertEquals(now - 30 * 60_000L, lastActivityEndedAt(listOf(rest), now))
+    }
+
+    @Test
+    fun `a session the calendar has only planned does not count`() {
+        val now = 1_000_000_000_000L
+        val done = ended("done", now - 90 * 60_000L, 30)
+        val planned = ended("planned", now + 60 * 60_000L, 30)
+
+        assertEquals(now - 60 * 60_000L, lastActivityEndedAt(listOf(done, planned), now))
+        assertNull(lastActivityEndedAt(listOf(planned), now))
+    }
+
+    @Test
+    fun `a session that has only just finished reads as now, not as the future`() {
+        val now = 1_000_000_000_000L
+        // Started two seconds ago and rounded up to a whole minute, so its end
+        // is 58 seconds away. It must still count, and must not run ahead.
+        val justNow = ended("just now", now - 2_000L, 1)
+
+        assertEquals(now, lastActivityEndedAt(listOf(justNow), now))
+    }
+
+    @Test
+    fun `an empty forest has never been anything but still`() {
+        assertNull(lastActivityEndedAt(emptyList(), 1_000_000_000_000L))
     }
 
     // ---------- time ----------

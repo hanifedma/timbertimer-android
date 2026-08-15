@@ -195,7 +195,7 @@ class TimerEngine(
     fun idleSummary(): TimerNotifications.IdleSummary? {
         if (_timer.value != null || _rest.value != null) return null
         return TimerNotifications.IdleSummary(
-            lastEndedAt = repository.lastSessionEndedAt(),
+            lastEndedAt = repository.lastActivityEndedAt(),
             todayMinutes = repository.todayFocusMinutes(),
         )
     }

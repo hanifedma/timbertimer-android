@@ -129,9 +129,10 @@ class TimerNotifications(context: Context) {
      * What to say when nothing is running: when the forest last grew, and how
      * much of it grew today.
      *
-     * [lastEndedAt] is null for someone who has never finished a session, which
+     * [lastEndedAt] is null for someone who has never finished anything, which
      * needs different words — "0m since your last session" would be a strange
-     * thing to tell a person on their first day.
+     * thing to tell a person on their first day. A rest counts towards it: it
+     * is still time they spent here.
      */
     data class IdleSummary(val lastEndedAt: Long?, val todayMinutes: Int)
 

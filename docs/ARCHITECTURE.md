@@ -15,6 +15,7 @@ app/src/main/java/com/example/timbertimer/
     Seed.kt              the name -> species/colour hash, bit-for-bit from the web
     Palette.kt           a project colour -> the four colours a tree is drawn with
     CalendarLayout.kt    records -> per-day blocks, packed into columns
+    Idle.kt              records -> when the forest last had something happen
     Time.kt              clock, calendar boundaries, ISO-8601
     UiMessage.kt         a message as a resource id, resolved at display time
 
@@ -37,8 +38,11 @@ app/src/main/java/com/example/timbertimer/
   widget/                the home screen to-do widget
 ```
 
-Dependencies point inward: `ui` knows about `data`, `data` knows about nothing
-above it, and `core` knows about neither.
+Dependencies point inward: `ui` knows about `data`, and `data` knows about
+nothing above it. `core` reaches only as far as `data/model` — the plain data
+classes a rule has to be written in terms of — and never to a repository, a
+screen, or anything from Android. That last part is the one that matters: it is
+what keeps every file in there runnable in a plain JVM test.
 
 ## A project owns the colour and the tree; a record only points at one
 
@@ -310,6 +314,10 @@ Two constraints that are easy to trip over:
 - **`CalendarLayoutTest`** — the day a record lands on, the split across
   midnight, the padding that keeps a one-minute record tappable, and the column
   packing (including a freed lane being reused rather than widening the run).
+- **`lastActivityEndedAt`**, in `TimerLogicTest` — the three rules the idle
+  notification's clock counts from: a rest counts, a session the calendar has
+  merely planned does not, and a session saved seconds ago reads as *now* rather
+  than as the future its rounded-up minute puts it in.
 - **`SchemaFallbackTest`** — which failures may convince the app that a column is
   missing, and, more importantly, which may not.
 

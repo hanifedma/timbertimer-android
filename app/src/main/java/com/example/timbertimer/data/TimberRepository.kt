@@ -2,6 +2,7 @@ package com.example.timbertimer.data
 
 import com.example.timbertimer.R
 import com.example.timbertimer.core.Time
+import com.example.timbertimer.core.lastActivityEndedAt
 import com.example.timbertimer.core.UiMessage
 import com.example.timbertimer.data.local.LocalStore
 import com.example.timbertimer.data.local.SettingsStore
@@ -933,30 +934,11 @@ class TimberRepository(
 
     /** Minutes focused today, rests excluded — the same sum the Records screen shows. */
     /**
-     * When the user last stopped working, or null if they never have.
-     *
-     * Rests do not count: the question this answers is how long the forest has
-     * been still, and a rest is the stillness, not the growth.
-     *
-     * A session the calendar has *planned* is ignored: a plan is not a thing
-     * already done, and counting one would run the clock backwards.
+     * When the user was last at it, or null if they never have been. Rests
+     * included — see [lastActivityEndedAt], which owns the rules.
      */
-    fun lastSessionEndedAt(): Long? {
-        val now = System.currentTimeMillis()
-        return _records.value
-            .asSequence()
-            .filter { !it.isRest }
-            // Judged by when it *began*. A session the calendar has planned has
-            // not happened yet and must not count; one that has only just
-            // finished ends up to a minute from now, because its length is
-            // rounded to whole minutes — and testing its end excluded it, so
-            // the app announced "nothing planted yet" for the first minute
-            // after planting something.
-            .filter { it.startedAt in 1..now }
-            // Clamped for that same session: it ended now, not in forty seconds.
-            .map { minOf(it.endsAt, now) }
-            .maxOrNull()
-    }
+    fun lastActivityEndedAt(): Long? =
+        lastActivityEndedAt(_records.value, System.currentTimeMillis())
 
     fun todayFocusMinutes(): Int {
         val today = Time.localDateKey(System.currentTimeMillis())
