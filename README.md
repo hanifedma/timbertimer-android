@@ -223,15 +223,21 @@ but not the same sentence: there is no service to repost it, and a body reading
 A notification describing something that is still happening should not disappear
 while it is still happening. Three things keep that true:
 
-- **Swiping one away puts it back.** From Android 14 even an ongoing
+- **Swiping the ongoing one away puts it back.** From Android 14 even an ongoing
   foreground-service notification can be flicked aside, and doing so does not
   stop the timer or close the sync connection — so the shade would be left
-  claiming the app is idle while it is doing the opposite. Every notification
-  carries a delete intent that reposts it. The way out is never blocked:
-  finishing the timer, turning **Keep syncing in the background** off, or turning
-  **Remind me when nothing is running** off each removes the reason, and with it
-  the notification. The finished-session alert clears for good when you tap it or
-  open the app.
+  claiming the app is idle while it is doing the opposite. It alone carries a
+  delete intent that reposts it. The way out is never blocked: finishing the
+  timer or turning **Keep syncing in the background** off removes the reason, and
+  with it the notification.
+
+  This does not extend to the other two. The finished-session alert announces
+  something that has already happened, and the idle nudge is an invitation —
+  neither reports on anything still running, so a swipe means what it says and
+  they stay gone. An alert that came back from being dismissed would be one there
+  is no way to be rid of at all. The nudge returns the next time there is
+  something new to say, and **Remind me when nothing is running** still silences
+  it for good.
 - **A quarter-hourly heartbeat.** A vendor battery manager that stops the service
   used to take the notification with it, silently, until something opened the
   app. An alarm now checks, restarts the service and reposts. It is exact only

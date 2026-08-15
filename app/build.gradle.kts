@@ -33,8 +33,8 @@ android {
         applicationId = "com.example.timbertimer"
         minSdk = 24
         targetSdk = 36
-        versionCode = 13
-        versionName = "2.2"
+        versionCode = 14
+        versionName = "2.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 

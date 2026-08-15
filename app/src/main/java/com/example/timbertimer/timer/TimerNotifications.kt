@@ -35,10 +35,12 @@ import com.example.timbertimer.data.model.TreeSpecies
  * to count to or from, which keeps the display exact while letting the service
  * repost only occasionally.
  *
- * Every notification here carries a delete intent. Dismissing one is not an
- * instruction to stop — the timer keeps running, the sync connection stays
- * open — so the shade would otherwise start lying about what the app is doing.
- * [NotificationRestorer] puts it straight back.
+ * The ongoing one, and only the ongoing one, is put back when it is swiped
+ * away. Dismissing that is not an instruction to stop — the timer keeps
+ * running, the sync connection stays open — so the shade would otherwise start
+ * lying about what the app is doing, and [NotificationRestorer] puts it
+ * straight back. The other two describe nothing that is still happening, so for
+ * those a swipe means what it says and they stay gone.
  */
 class TimerNotifications(context: Context) {
 
@@ -155,7 +157,7 @@ class TimerNotifications(context: Context) {
             // swiped away like any other. The service is still running when that
             // happens, so the notification comes straight back rather than
             // leaving a timer counting down with nothing on screen.
-            .setDeleteIntent(restoreIntent(WHICH_ONGOING))
+            .setDeleteIntent(restoreIntent())
             // Android 16 promotes a live, ongoing notification to a status bar
             // chip and a prominent lock screen slot — which is exactly what a
             // running timer is, and exactly what the sync-only one is not.
@@ -434,50 +436,40 @@ class TimerNotifications(context: Context) {
         )
     }
 
-    /** Fired when a session finishes, so it is noticed from the lock screen. */
-    fun showCompleted(record: FocusRecord) {
-        val species = TreeSpecies.byLabelOrId(record.treeKind) ?: TreeSpecies.PINE
-        showCompleted(
-            title = context.getString(R.string.notif_done_title),
-            text = context.getString(
-                R.string.notif_done_text,
-                record.title,
-                Time.formatMinutes(
-                    record.actualMinutes,
-                    context.getString(R.string.unit_m),
-                    context.getString(R.string.unit_h),
-                ),
-                context.getString(species.displayRes).lowercase(),
-            ),
-        )
-    }
-
     /**
-     * Posts — or reposts — the finished-session alert.
+     * Fired when a session finishes, so it is noticed from the lock screen.
      *
-     * The wording travels in the delete intent rather than being looked up
-     * again, because the process may have been recycled between the session
-     * finishing and the user swiping the alert away.
+     * It carries no delete intent, and that is the point. This announces
+     * something that has already happened rather than reporting on something
+     * still going on, so a swipe is the user saying they have seen it — and an
+     * alert that reappeared from being dismissed would be one there is no way
+     * to be rid of at all. Nothing is lost by letting it go: the tree was
+     * planted before this was posted, and the forest is where it lives.
      */
-    fun showCompleted(title: String, text: String) {
+    fun showCompleted(record: FocusRecord) {
         if (!canPost()) return
+
+        val species = TreeSpecies.byLabelOrId(record.treeKind) ?: TreeSpecies.PINE
+        val text = context.getString(
+            R.string.notif_done_text,
+            record.title,
+            Time.formatMinutes(
+                record.actualMinutes,
+                context.getString(R.string.unit_m),
+                context.getString(R.string.unit_h),
+            ),
+            context.getString(species.displayRes).lowercase(),
+        )
 
         val notification = NotificationCompat.Builder(context, doneChannel)
             .setSmallIcon(R.drawable.ic_stat_tree)
             .setColor(ContextCompat.getColor(context, R.color.timber_accent))
-            .setContentTitle(title)
+            .setContentTitle(context.getString(R.string.notif_done_title))
             .setContentText(text)
             .setStyle(NotificationCompat.BigTextStyle().bigText(text))
             .setContentIntent(openApp())
-            // Tapping it opens the forest and clears it for good; swiping it
-            // aside does not, because a finished session the user never saw is
-            // the one thing this app must not lose quietly.
+            // Tapping it opens the forest, and clears it on the way.
             .setAutoCancel(true)
-            .setDeleteIntent(
-                restoreIntent(WHICH_DONE) { intent ->
-                    intent.putExtra(EXTRA_TITLE, title).putExtra(EXTRA_TEXT, text)
-                }
-            )
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             // ALARM is the category Do Not Disturb lets through under its own
             // "allow alarms" rule, which is the default on every Android build.
@@ -496,6 +488,11 @@ class TimerNotifications(context: Context) {
      * notification, but not the same sentence — with sync off there is no
      * service to repost it, so only the self-updating chronometer can be trusted
      * to still be true tomorrow morning.
+     *
+     * An invitation that could not be declined would stop being one, so this is
+     * not restored when swiped either. It comes back the next time there is
+     * something new to say — a session started or finished, or the app closed
+     * again — and the switch in Settings is still what silences it for good.
      */
     fun showIdle(idle: IdleSummary) {
         if (!canPost()) return
@@ -509,9 +506,6 @@ class TimerNotifications(context: Context) {
             .setOnlyAlertOnce(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            // Swiping it away does not switch the reminder off — the switch in
-            // Settings does. Until then the app's state stays on show.
-            .setDeleteIntent(restoreIntent(WHICH_IDLE))
 
         applyIdleContent(builder, idle, worded = false)
 
@@ -584,14 +578,10 @@ class TimerNotifications(context: Context) {
         }
     }
 
-    private fun restoreIntent(which: Int, extras: (Intent) -> Unit = {}): PendingIntent {
+    private fun restoreIntent(): PendingIntent {
         val intent = Intent(context, NotificationRestorer::class.java)
             .setAction(NotificationRestorer.ACTION_RESTORE)
-            .putExtra(EXTRA_WHICH, which)
-            .also(extras)
-        // FLAG_UPDATE_CURRENT is part of IMMUTABLE, so the extras on a reposted
-        // alert replace the ones the previous post left behind.
-        return PendingIntent.getBroadcast(context, which, intent, IMMUTABLE)
+        return PendingIntent.getBroadcast(context, REQUEST_RESTORE, intent, IMMUTABLE)
     }
 
     // ---------- Do Not Disturb ----------
@@ -669,14 +659,12 @@ class TimerNotifications(context: Context) {
         const val ID_DONE = 1002
         const val ID_IDLE = 1003
 
-        /** Which notification a delete intent belongs to. */
-        const val EXTRA_WHICH = "com.example.timbertimer.WHICH"
-        const val EXTRA_TITLE = "com.example.timbertimer.TITLE"
-        const val EXTRA_TEXT = "com.example.timbertimer.TEXT"
-
-        const val WHICH_ONGOING = 1
-        const val WHICH_DONE = 2
-        const val WHICH_IDLE = 3
+        /**
+         * Request code for the one delete intent left. Kept at the value the
+         * ongoing notification has always used, so an update does not orphan a
+         * token already sitting on a posted notification.
+         */
+        private const val REQUEST_RESTORE = 1
 
         /** Where a ticking clock stops being encouragement and starts nagging. */
         private const val DAY_MS = 24 * 60 * 60 * 1000L

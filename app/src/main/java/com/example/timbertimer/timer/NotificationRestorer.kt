@@ -7,18 +7,22 @@ import com.example.timbertimer.TimberApplication
 import kotlinx.coroutines.launch
 
 /**
- * Puts back a notification the user swiped away.
+ * Puts back the ongoing notification when the user swipes it away.
  *
  * The platform treats a dismissal as "I have seen this", which is the right
  * default for an alert and the wrong one for a status. A running countdown does
  * not stop because its notification was flicked aside, and neither does the
  * background sync connection — so a shade with nothing in it would be claiming
- * the app is idle while it is doing exactly the opposite. Every one of this
- * app's notifications therefore hands a delete intent here, and it reposts.
+ * the app is idle while it is doing exactly the opposite.
  *
- * The way out is never blocked: stopping the timer, turning background sync off
- * or turning the reminder off each removes the reason for the notification, and
- * with it the notification. Only *dismissal without a decision* is undone.
+ * This applies to that one notification and no other. The finished-session
+ * alert and the idle nudge report on nothing that is still running, so a swipe
+ * is simply the user having seen them, and reposting would leave an alert with
+ * no way to dismiss it at all.
+ *
+ * The way out is never blocked here either: stopping the timer or turning
+ * background sync off removes the reason for the notification, and with it the
+ * notification. Only *dismissal without a decision* is undone.
  *
  * A delete intent fires only for a dismissal by the user — the app's own
  * `cancel()` calls do not trigger one — so there is no loop to guard against.
@@ -29,23 +33,12 @@ class NotificationRestorer : BroadcastReceiver() {
         if (intent.action != ACTION_RESTORE) return
         val container = (context.applicationContext as? TimberApplication)?.container ?: return
 
-        val which = intent.getIntExtra(TimerNotifications.EXTRA_WHICH, 0)
-        if (which == TimerNotifications.WHICH_DONE) {
-            // Self-contained: the wording travels in the intent, so this works
-            // even when the process died between the session finishing and the
-            // swipe that brought us here.
-            val title = intent.getStringExtra(TimerNotifications.EXTRA_TITLE)
-            val text = intent.getStringExtra(TimerNotifications.EXTRA_TEXT)
-            if (title != null && text != null) container.notifications.showCompleted(title, text)
-            return
-        }
-
-        // The other two describe live state, so they are rebuilt from it rather
-        // than from anything the intent carried.
+        // Rebuilt from live state rather than reposted verbatim, because the
+        // process may have been recycled since it was last built.
         val pending = goAsync()
         container.scope.launch {
             try {
-                container.timerEngine.restoreNotification(which)
+                container.timerEngine.restoreOngoingNotification()
             } finally {
                 pending.finish()
             }

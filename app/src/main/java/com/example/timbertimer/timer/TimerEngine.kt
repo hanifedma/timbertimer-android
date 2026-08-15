@@ -92,8 +92,9 @@ class TimerEngine(
         foreground = value
         if (value) {
             // Back in the app: the invitation has been accepted, or at least
-            // seen — and so has any finished session, which is the guaranteed
-            // way to be rid of an alert that otherwise survives being swiped.
+            // seen — and so has any finished session, whose tree is now on
+            // screen. Leaving either in the shade would be announcing news the
+            // user is already looking at.
             notifications.cancelIdle()
             notifications.cancelCompleted()
             ensureTicking()
@@ -125,26 +126,19 @@ class TimerEngine(
     }
 
     /**
-     * Puts back a notification the user swiped away, rebuilt from live state.
+     * Puts back the ongoing notification after a swipe, rebuilt from live state.
      *
      * Rebuilt rather than reposted verbatim because time has passed: a countdown
-     * dismissed at eight minutes left should come back saying seven. And the
-     * ongoing one is reposted only if it is still deserved — a timer that
-     * finished in the meantime removes the reason for it, and the dismissal then
-     * stands.
+     * dismissed at eight minutes left should come back saying seven. And it is
+     * reposted only if it is still deserved — a timer that finished in the
+     * meantime removes the reason for it, and the dismissal then stands.
      */
-    fun restoreNotification(which: Int) {
-        when (which) {
-            TimerNotifications.WHICH_ONGOING -> {
-                if (!serviceWanted()) return
-                // The service may itself have been the casualty; this both
-                // revives it and reposts through it.
-                syncService()
-                postOngoing()
-            }
-
-            TimerNotifications.WHICH_IDLE -> refreshIdleNudge()
-        }
+    fun restoreOngoingNotification() {
+        if (!serviceWanted()) return
+        // The service may itself have been the casualty; this both revives it
+        // and reposts through it.
+        syncService()
+        postOngoing()
     }
 
     /**
@@ -200,7 +194,17 @@ class TimerEngine(
         )
     }
 
+    /**
+     * Reposts the ongoing notification, but only while something still wants
+     * the service.
+     *
+     * Without that guard, finishing a session with background sync off posts it
+     * again just after the stopping service took it down — leaving a permanent
+     * notification in the shade with nothing running behind it and nothing left
+     * that would ever clear it.
+     */
     private fun postOngoing() {
+        if (!serviceWanted()) return
         notifications.update(_timer.value, _rest.value, idleSummary())
     }
 
@@ -404,29 +408,37 @@ class TimerEngine(
         val minutes = (elapsedSeconds / 60.0).roundToLong().toInt()
         if (minutes < 1) {
             _messages.tryEmit(UiMessage.of(R.string.toast_rest_discarded))
-            return
+        } else {
+            // Capped at a day for the same reason a focus session is: the table
+            // refuses anything longer, and a rest left running is still a record.
+            val capped = minutes.coerceAtMost(Limits.MINUTES_MAX)
+            val now = System.currentTimeMillis()
+            repository.createRecord(
+                FocusRecord(
+                    id = UUID.randomUUID().toString(),
+                    title = Limits.REST_TITLE,
+                    projectId = Projects.REST_ID,
+                    actualMinutes = capped,
+                    startedAt = rest.startedAt,
+                    endedAt = rest.startedAt + capped * 60_000L,
+                    // Rest is a project like any other, so it plants whatever
+                    // tree that project grows — a wilted sprout unless it was
+                    // changed.
+                    treeKind = RecordMapper.pickTreeKind(repository.projects.value, Projects.REST_ID),
+                    createdAt = now,
+                    updatedAt = now,
+                )
+            )
+            _messages.tryEmit(UiMessage.of(R.string.toast_rest_planted))
         }
 
-        // Capped at a day for the same reason a focus session is: the table
-        // refuses anything longer, and a rest left running is still a record.
-        val capped = minutes.coerceAtMost(Limits.MINUTES_MAX)
-        val now = System.currentTimeMillis()
-        repository.createRecord(
-            FocusRecord(
-                id = UUID.randomUUID().toString(),
-                title = Limits.REST_TITLE,
-                projectId = Projects.REST_ID,
-                actualMinutes = capped,
-                startedAt = rest.startedAt,
-                endedAt = rest.startedAt + capped * 60_000L,
-                // Rest is a project like any other, so it plants whatever tree
-                // that project grows — a wilted sprout unless it was changed.
-                treeKind = RecordMapper.pickTreeKind(repository.projects.value, Projects.REST_ID),
-                createdAt = now,
-                updatedAt = now,
-            )
-        )
-        _messages.tryEmit(UiMessage.of(R.string.toast_rest_planted))
+        // For the same reason the focus path does it: applyRest above rebuilt
+        // the notification while this record did not yet exist, so its count-up
+        // clock started from whatever came before the rest. A rest resets that
+        // clock, so say so now rather than a minute from now — and on the
+        // discarded branch too, where the reset is the one that did not happen.
+        postOngoing()
+        refreshIdleNudge()
     }
 
     // ---------- the ticker ----------
