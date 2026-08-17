@@ -156,12 +156,40 @@ class LocalStore(context: Context) {
         }.apply()
     }
 
-    /** Epoch millis the rest stopwatch started, or null when it is not running. */
-    fun readRestStartedAt(): Long? = prefs.getLong(KEY_REST, 0L).takeIf { it > 0L }
+    /**
+     * The running rest, or null when there is none.
+     *
+     * [KEY_REST] alone is what an older build wrote, and it still means what it
+     * meant then: an open-ended stopwatch. A rest saved by this build adds the
+     * two fields a countdown needs beside it, so upgrading mid-rest keeps the
+     * rest rather than dropping it.
+     */
+    fun readRest(): StoredRest? {
+        val startedAt = prefs.getLong(KEY_REST, 0L).takeIf { it > 0L } ?: return null
+        return StoredRest(
+            startedAt = startedAt,
+            endAt = prefs.getLong(KEY_REST_END, 0L).takeIf { it > 0L },
+            durationMinutes = prefs.getInt(KEY_REST_MINUTES, 0),
+            // A rest written by an older build was published on the way in, or
+            // was never going to be; treating it as published keeps that
+            // build's behaviour rather than re-uploading a finished rest.
+            cloudSynced = prefs.getBoolean(KEY_REST_SYNCED, true),
+        )
+    }
 
-    fun writeRestStartedAt(startedAt: Long?) {
+    fun writeRest(rest: StoredRest?) {
         prefs.edit().apply {
-            if (startedAt == null) remove(KEY_REST) else putLong(KEY_REST, startedAt)
+            if (rest == null) {
+                remove(KEY_REST)
+                remove(KEY_REST_END)
+                remove(KEY_REST_MINUTES)
+                remove(KEY_REST_SYNCED)
+            } else {
+                putLong(KEY_REST, rest.startedAt)
+                if (rest.endAt == null) remove(KEY_REST_END) else putLong(KEY_REST_END, rest.endAt)
+                putInt(KEY_REST_MINUTES, rest.durationMinutes)
+                putBoolean(KEY_REST_SYNCED, rest.cloudSynced)
+            }
         }.apply()
     }
 
@@ -197,8 +225,24 @@ class LocalStore(context: Context) {
         const val KEY_WIDGET_NOTES = "widget-notes"
         const val KEY_TIMER = "timer"
         const val KEY_REST = "rest-started-at"
+        const val KEY_REST_END = "rest-end-at"
+        const val KEY_REST_MINUTES = "rest-duration-minutes"
+        const val KEY_REST_SYNCED = "rest-cloud-synced"
     }
 }
+
+/**
+ * The running rest as written to disk.
+ *
+ * [endAt] absent is the open-ended stopwatch, which is also what every rest
+ * written before rest countdowns existed was.
+ */
+data class StoredRest(
+    val startedAt: Long,
+    val endAt: Long?,
+    val durationMinutes: Int,
+    val cloudSynced: Boolean,
+)
 
 /** One task as the widget needs it: what it says, and whether it is done. */
 @Serializable

@@ -230,20 +230,40 @@ class SupabaseApi(
 
     // ---------- active_rest_timers ----------
 
-    suspend fun fetchRestTimer(token: String, userId: String): RestTimerRow? {
+    /**
+     * [withCountdown] names the two columns a rest countdown needs. Naming a
+     * column that does not exist fails the whole select, so a database that
+     * predates the migration is read with the original projection and every
+     * rest on it reads as the open-ended stopwatch it was written as.
+     */
+    suspend fun fetchRestTimer(
+        token: String,
+        userId: String,
+        withCountdown: Boolean,
+    ): RestTimerRow? {
         val url = restUrl(SupabaseConfig.ACTIVE_RESTS_TABLE)
-            .addQueryParameter("select", "started_at")
+            .addQueryParameter(
+                "select",
+                if (withCountdown) "started_at,end_at,duration_minutes" else "started_at",
+            )
             .addQueryParameter("user_id", "eq.$userId")
             .addQueryParameter("limit", "1")
             .build()
         return getList(url, token, RestTimerRow.serializer()).firstOrNull()
     }
 
-    suspend fun upsertRestTimer(token: String, row: RestTimerUpsert) {
+    suspend fun upsertRestTimer(token: String, row: RestTimerUpsert, withCountdown: Boolean) {
         val url = restUrl(SupabaseConfig.ACTIVE_RESTS_TABLE)
             .addQueryParameter("on_conflict", "user_id")
             .build()
-        val payload = json.encodeToString(ListSerializer(RestTimerUpsert.serializer()), listOf(row))
+        val payload = if (withCountdown) {
+            json.encodeToString(ListSerializer(RestTimerUpsert.serializer()), listOf(row))
+        } else {
+            json.encodeToString(
+                ListSerializer(RestTimerUpsertLegacy.serializer()),
+                listOf(row.withoutCountdown()),
+            )
+        }
         execute(
             authorized(url, token)
                 .addHeader("Content-Type", JSON)

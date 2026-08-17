@@ -11,6 +11,7 @@ import com.example.timbertimer.core.Time
 import com.example.timbertimer.core.UiMessage
 import com.example.timbertimer.data.RecordMapper
 import com.example.timbertimer.data.TimberRepository
+import com.example.timbertimer.data.local.RestAlertStyle
 import com.example.timbertimer.data.local.SettingsStore
 import com.example.timbertimer.data.model.FocusRecord
 import com.example.timbertimer.data.model.Limits
@@ -36,12 +37,20 @@ import kotlin.math.roundToLong
 /** Which forest window the user is looking at. */
 enum class GroveView { DAY, WEEK, MONTH }
 
-/** The focus form, kept apart from the running timer it may go on to create. */
+/**
+ * The focus form, kept apart from the running timer it may go on to create.
+ *
+ * The rest's two fields live here rather than in a form of their own: they are
+ * the same kind of thing — what the next one will be, not what a running one
+ * is — and the panel that reads them sits on this screen.
+ */
 data class FocusForm(
     val title: String = "",
     val durationMinutes: Int = Limits.DEFAULT_DURATION,
     val mode: TimerMode = TimerMode.COUNTDOWN,
     val projectId: String = Projects.DEFAULT_ID,
+    val restMode: TimerMode = TimerMode.COUNTDOWN,
+    val restMinutes: Int = Limits.DEFAULT_REST_DURATION,
 )
 
 data class GroveState(
@@ -183,6 +192,8 @@ class TimberViewModel(
             durationMinutes = settings.duration.value,
             mode = settings.timerMode.value,
             projectId = settings.selectedProjectId.value.ifBlank { Projects.DEFAULT_ID },
+            restMode = settings.restMode.value,
+            restMinutes = settings.restDuration.value,
         )
 
         viewModelScope.launch { repository.messages.collect { _messages.emit(it) } }
@@ -332,12 +343,47 @@ class TimberViewModel(
         viewModelScope.launch { engine.finish() }
     }
 
+    // ---------- the rest ----------
+
+    fun setRestMode(mode: TimerMode) {
+        if (rest.value != null) return
+        _form.value = _form.value.copy(restMode = mode)
+        settings.setRestMode(mode)
+    }
+
+    fun setRestDuration(minutes: Int) {
+        if (rest.value != null) return
+        // Clamped for the form the same way the engine clamps it on the way in,
+        // so the number on screen is the number that will run. The box itself
+        // accepts up to three digits, and 999 is not a rest.
+        val safe = minutes.coerceIn(1, Limits.TIMER_MINUTES_MAX)
+        _form.value = _form.value.copy(restMinutes = safe)
+        settings.setRestDuration(safe)
+    }
+
     fun startRest() {
-        viewModelScope.launch { engine.startRest() }
+        val form = _form.value
+        viewModelScope.launch { engine.startRest(form.restMode, form.restMinutes) }
     }
 
     fun finishRest() {
         viewModelScope.launch { engine.finishRest() }
+    }
+
+    fun extendRest() {
+        viewModelScope.launch { engine.extendRest() }
+    }
+
+    /**
+     * Auditions the choice as it is made, the way the volume slider does.
+     *
+     * A setting whose whole subject is "how loud and how insistent" is one
+     * nobody can evaluate by reading four words — and the one time it normally
+     * plays is the one time they cannot be experimenting with it.
+     */
+    fun setRestAlert(style: RestAlertStyle) {
+        settings.setRestAlert(style)
+        feedback.previewRestAlarm(style)
     }
 
     // ---------- forest ----------

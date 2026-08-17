@@ -115,6 +115,7 @@ fun TimberApp(
     onAddWidget: () -> Unit,
     onIgnoreBatteryOptimisation: () -> Unit,
     onAllowDoNotDisturb: () -> Unit,
+    onAllowFullScreen: () -> Unit,
 ) {
     val context = LocalContext.current
     val snackbarHost = remember { SnackbarHostState() }
@@ -148,6 +149,7 @@ fun TimberApp(
     val vibrate by viewModel.settings.vibrate.collectAsStateWithLifecycle()
     val idleReminder by viewModel.settings.idleReminder.collectAsStateWithLifecycle()
     val backgroundSync by viewModel.settings.backgroundSync.collectAsStateWithLifecycle()
+    val restAlert by viewModel.settings.restAlert.collectAsStateWithLifecycle()
 
     // The widget opens the app at a screen rather than wherever it was left.
     LaunchedEffect(requestedDestination) {
@@ -284,8 +286,11 @@ fun TimberApp(
                                 onSpeciesChange = viewModel::setProjectTree,
                                 onStart = viewModel::start,
                                 onFinish = viewModel::finish,
+                                onRestModeChange = viewModel::setRestMode,
+                                onRestDurationChange = viewModel::setRestDuration,
                                 onStartRest = viewModel::startRest,
                                 onFinishRest = viewModel::finishRest,
+                                onExtendRest = viewModel::extendRest,
                             )
                         }
 
@@ -351,6 +356,7 @@ fun TimberApp(
                                 vibrate = vibrate,
                                 idleReminder = idleReminder,
                                 backgroundSync = backgroundSync,
+                                restAlert = restAlert,
                                 onThemeChange = viewModel.settings::setThemeMode,
                                 onLanguageChange = onLanguageChange,
                                 onSoundToggle = viewModel::toggleSound,
@@ -359,8 +365,10 @@ fun TimberApp(
                                 onVibrateChange = viewModel.settings::setVibrate,
                                 onIdleReminderChange = viewModel::setIdleReminder,
                                 onBackgroundSyncChange = viewModel::setBackgroundSync,
+                                onRestAlertChange = viewModel::setRestAlert,
                                 onIgnoreBatteryOptimisation = onIgnoreBatteryOptimisation,
                                 onAllowDoNotDisturb = onAllowDoNotDisturb,
+                                onAllowFullScreen = onAllowFullScreen,
                                 onAddWidget = onAddWidget,
                                 onManageProjects = { managingProjects = true },
                                 projectsSyncBlocked = projectsSyncBlocked,

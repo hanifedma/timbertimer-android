@@ -22,6 +22,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.timbertimer.R
 import com.example.timbertimer.data.local.LocaleStore
+import com.example.timbertimer.data.local.RestAlertStyle
 import com.example.timbertimer.data.local.ThemeMode
 import com.example.timbertimer.data.model.DataMode
 import com.example.timbertimer.data.remote.Session
@@ -45,6 +46,7 @@ fun SettingsScreen(
     vibrate: Boolean,
     idleReminder: Boolean,
     backgroundSync: Boolean,
+    restAlert: RestAlertStyle,
     onThemeChange: (ThemeMode) -> Unit,
     onLanguageChange: (String) -> Unit,
     onSoundToggle: () -> Unit,
@@ -53,8 +55,10 @@ fun SettingsScreen(
     onVibrateChange: (Boolean) -> Unit,
     onIdleReminderChange: (Boolean) -> Unit,
     onBackgroundSyncChange: (Boolean) -> Unit,
+    onRestAlertChange: (RestAlertStyle) -> Unit,
     onIgnoreBatteryOptimisation: () -> Unit,
     onAllowDoNotDisturb: () -> Unit,
+    onAllowFullScreen: () -> Unit,
     onAddWidget: () -> Unit,
     onManageProjects: () -> Unit,
     projectsSyncBlocked: Boolean,
@@ -220,6 +224,52 @@ fun SettingsScreen(
                 )
                 Switch(checked = idleReminder, onCheckedChange = onIdleReminderChange)
             }
+        }
+
+        // Its own panel rather than a fourth row in the one above, because it
+        // is not governed by anything there. The switches above are about the
+        // chime that ends a focus session; this is about an alarm, and the two
+        // answer to different intentions.
+        Panel(kicker = stringResource(R.string.settings_rest_alert)) {
+            SegmentedRow(
+                options = listOf(
+                    RestAlertStyle.BOTH,
+                    RestAlertStyle.SOUND,
+                    RestAlertStyle.VIBRATE,
+                    RestAlertStyle.SILENT,
+                ),
+                selected = restAlert,
+                label = {
+                    stringResource(
+                        when (it) {
+                            RestAlertStyle.BOTH -> R.string.settings_rest_alert_both
+                            RestAlertStyle.SOUND -> R.string.settings_rest_alert_sound
+                            RestAlertStyle.VIBRATE -> R.string.settings_rest_alert_vibrate
+                            RestAlertStyle.SILENT -> R.string.settings_rest_alert_silent
+                        }
+                    )
+                },
+                onSelect = onRestAlertChange,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Text(
+                text = stringResource(R.string.settings_rest_alert_desc),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+
+            Spacer(Modifier.height(12.dp))
+
+            OutlinedButton(onClick = onAllowFullScreen, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.settings_full_screen), textAlign = TextAlign.Center)
+            }
+            Text(
+                text = stringResource(R.string.settings_full_screen_desc),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 8.dp),
+            )
         }
 
         Panel(kicker = stringResource(R.string.settings_background_sync)) {

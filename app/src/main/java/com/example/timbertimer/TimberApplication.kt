@@ -10,6 +10,7 @@ import com.example.timbertimer.data.remote.GoogleSignIn
 import com.example.timbertimer.data.remote.RealtimeClient
 import com.example.timbertimer.data.remote.SupabaseApi
 import com.example.timbertimer.data.remote.SupabaseAuth
+import com.example.timbertimer.timer.RestAlarm
 import com.example.timbertimer.timer.TimerAlarms
 import com.example.timbertimer.timer.TimerEngine
 import com.example.timbertimer.timer.TimerFeedback
@@ -73,6 +74,14 @@ class AppContainer(private val context: Context) {
 
     private val alarms = TimerAlarms(context)
 
+    val restAlarm = RestAlarm(
+        context = context,
+        settings = settings,
+        feedback = feedback,
+        notifications = notifications,
+        scope = scope,
+    )
+
     val timerEngine = TimerEngine(
         context = context,
         local = local,
@@ -81,6 +90,7 @@ class AppContainer(private val context: Context) {
         feedback = feedback,
         notifications = notifications,
         alarms = alarms,
+        restAlarm = restAlarm,
         liveSync = realtime.connected,
         scope = scope,
     )

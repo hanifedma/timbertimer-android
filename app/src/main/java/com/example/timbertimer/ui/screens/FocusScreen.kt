@@ -3,6 +3,7 @@ package com.example.timbertimer.ui.screens
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -48,6 +49,7 @@ import com.example.timbertimer.R
 import com.example.timbertimer.core.Time
 import com.example.timbertimer.data.model.ActiveTimer
 import com.example.timbertimer.data.model.DataMode
+import com.example.timbertimer.data.model.Limits
 import com.example.timbertimer.data.model.ProjectBook
 import com.example.timbertimer.data.model.Projects
 import com.example.timbertimer.data.model.RestTimer
@@ -63,6 +65,7 @@ import com.example.timbertimer.ui.components.TimerDial
 import com.example.timbertimer.ui.components.TreeArt
 import com.example.timbertimer.ui.components.projectColors
 import com.example.timbertimer.ui.components.projectLabel
+import com.example.timbertimer.ui.components.rememberClockFormat
 import com.example.timbertimer.ui.components.rememberTreePalette
 
 private val DURATION_PRESETS = listOf(15, 30, 45, 60)
@@ -92,8 +95,11 @@ fun FocusScreen(
     onSpeciesChange: (TreeSpecies) -> Unit,
     onStart: () -> Unit,
     onFinish: () -> Unit,
+    onRestModeChange: (TimerMode) -> Unit,
+    onRestDurationChange: (Int) -> Unit,
     onStartRest: () -> Unit,
     onFinishRest: () -> Unit,
+    onExtendRest: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     if (wide) {
@@ -113,7 +119,11 @@ fun FocusScreen(
                     onTitleChange, onDurationChange, onModeChange,
                     onProjectChange, onManageProjects, onSpeciesChange,
                 )
-                RestPanel(book, rest, now, onStartRest, onFinishRest)
+                RestPanel(
+                    form, book, rest, now,
+                    onRestModeChange, onRestDurationChange,
+                    onStartRest, onFinishRest, onExtendRest,
+                )
             }
         }
     } else {
@@ -127,7 +137,11 @@ fun FocusScreen(
                 onTitleChange, onDurationChange, onModeChange,
                 onProjectChange, onManageProjects, onSpeciesChange,
             )
-            RestPanel(book, rest, now, onStartRest, onFinishRest)
+            RestPanel(
+                form, book, rest, now,
+                onRestModeChange, onRestDurationChange,
+                onStartRest, onFinishRest, onExtendRest,
+            )
         }
     }
 }
@@ -345,10 +359,7 @@ private fun SetupPanel(
                     OutlinedButton(
                         onClick = { onDurationChange(minutes) },
                         enabled = editable,
-                        contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                            horizontal = 4.dp,
-                            vertical = 8.dp,
-                        ),
+                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
                         colors = if (selected) {
                             ButtonDefaults.outlinedButtonColors(
                                 containerColor = MaterialTheme.colorScheme.primaryContainer,
@@ -433,21 +444,53 @@ private fun DurationField(
     )
 }
 
+/**
+ * The rest panel.
+ *
+ * Two shapes in one, chosen by [FocusForm.restMode]. A timed rest is the
+ * default and the point of the panel: five, ten or fifteen minutes is what a
+ * break actually is, and a rest that ends by itself is the only kind that
+ * reliably ends. The open-ended stopwatch is kept beside it because a rest you
+ * are content to leave running is a genuinely different thing, and it was the
+ * only thing this panel used to do.
+ *
+ * While one is running the controls collapse to the clock and the way out — the
+ * length is fixed by then, and a picker that could no longer change anything
+ * would just be furniture.
+ */
 @Composable
 private fun RestPanel(
+    form: FocusForm,
     book: ProjectBook,
     rest: RestTimer?,
     now: Long,
+    onRestModeChange: (TimerMode) -> Unit,
+    onRestDurationChange: (Int) -> Unit,
     onStartRest: () -> Unit,
     onFinishRest: () -> Unit,
+    onExtendRest: () -> Unit,
 ) {
     val resting = rest != null
-    val elapsed = rest?.elapsedSeconds(now) ?: 0L
+    val countdown = rest?.isCountdown ?: (form.restMode == TimerMode.COUNTDOWN)
     val restProject = book[Projects.REST_ID]
 
+    // Not running, a countdown shows the length it is set to rather than 00:00 —
+    // the same thing the focus dial does, so pressing Start holds no surprise.
+    val seconds = when {
+        rest != null -> rest.displaySeconds(now)
+        countdown -> form.restMinutes * 60L
+        else -> 0L
+    }
+
     Panel(
-        kicker = stringResource(R.string.rest_elapsed),
-        title = stringResource(if (resting) R.string.rest_resting else R.string.rest_title),
+        kicker = stringResource(if (countdown) R.string.rest_remaining else R.string.rest_elapsed),
+        title = stringResource(
+            when {
+                resting -> R.string.rest_resting
+                countdown -> R.string.rest_title
+                else -> R.string.rest_title_open
+            }
+        ),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             // A rest grows the tree it will plant, so its cost is visible while
@@ -458,12 +501,76 @@ private fun RestPanel(
                 modifier = Modifier.size(56.dp),
             )
             Spacer(Modifier.width(12.dp))
-            Text(
-                text = Time.formatClock(elapsed),
-                style = MaterialTheme.typography.headlineMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.weight(1f),
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = Time.formatClock(seconds),
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                // The wall-clock time it lands on, which is the question anyone
+                // mid-rest actually has: not "how long left" but "can I finish
+                // this first".
+                if (rest?.endAt != null) {
+                    Text(
+                        text = stringResource(
+                            R.string.rest_ends_at,
+                            rememberClockFormat().time(rest.endAt),
+                        ),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+
+        if (!resting) {
+            Spacer(Modifier.height(14.dp))
+            SegmentedRow(
+                options = listOf(TimerMode.COUNTDOWN, TimerMode.STOPWATCH),
+                selected = form.restMode,
+                label = {
+                    stringResource(
+                        if (it == TimerMode.COUNTDOWN) R.string.rest_mode_timer
+                        else R.string.rest_mode_open
+                    )
+                },
+                onSelect = onRestModeChange,
+                modifier = Modifier.fillMaxWidth(),
             )
+
+            if (form.restMode == TimerMode.COUNTDOWN) {
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    text = stringResource(R.string.rest_length),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(6.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Limits.REST_PRESETS.forEach { minutes ->
+                        val selected = form.restMinutes == minutes
+                        OutlinedButton(
+                            onClick = { onRestDurationChange(minutes) },
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
+                            colors = if (selected) {
+                                ButtonDefaults.outlinedButtonColors(
+                                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                )
+                            } else ButtonDefaults.outlinedButtonColors(),
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text("$minutes", maxLines = 1)
+                        }
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                DurationField(
+                    minutes = form.restMinutes,
+                    enabled = true,
+                    onDurationChange = onRestDurationChange,
+                )
+            }
         }
 
         Spacer(Modifier.height(12.dp))
@@ -482,6 +589,15 @@ private fun RestPanel(
                 modifier = Modifier.weight(1f),
             ) {
                 Text(stringResource(R.string.rest_finish), maxLines = 1)
+            }
+        }
+
+        // Only for a running countdown: there is nothing to extend on a
+        // stopwatch, which already runs until it is stopped.
+        if (rest?.isCountdown == true) {
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(onClick = onExtendRest, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.rest_extend), maxLines = 1)
             }
         }
     }

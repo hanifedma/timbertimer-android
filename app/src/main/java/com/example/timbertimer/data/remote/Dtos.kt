@@ -179,10 +179,36 @@ data class DeletedUserRow(@SerialName("user_id") val userId: String? = null)
 // ---------- active_rest_timers ----------
 
 @Serializable
-data class RestTimerRow(@SerialName("started_at") val startedAt: String? = null)
+data class RestTimerRow(
+    @SerialName("started_at") val startedAt: String? = null,
+    /** Absent on a database that predates rest countdowns; then it is a stopwatch. */
+    @SerialName("end_at") val endAt: String? = null,
+    @SerialName("duration_minutes") val durationMinutes: Int = 0,
+)
 
 @Serializable
 data class RestTimerUpsert(
+    @SerialName("user_id") val userId: String,
+    @SerialName("started_at") val startedAt: String,
+    /** Null is a running stopwatch, which is a value the column accepts. */
+    @SerialName("end_at") val endAt: String? = null,
+    @SerialName("duration_minutes") val durationMinutes: Int = 0,
+    @SerialName("updated_at") val updatedAt: String,
+) {
+    /**
+     * The same row as a database predating the rest-countdown migration will
+     * accept. PostgREST refuses a whole request that names a column which does
+     * not exist, so the two fields have to be dropped rather than sent as null.
+     */
+    fun withoutCountdown() = RestTimerUpsertLegacy(
+        userId = userId,
+        startedAt = startedAt,
+        updatedAt = updatedAt,
+    )
+}
+
+@Serializable
+data class RestTimerUpsertLegacy(
     @SerialName("user_id") val userId: String,
     @SerialName("started_at") val startedAt: String,
     @SerialName("updated_at") val updatedAt: String,

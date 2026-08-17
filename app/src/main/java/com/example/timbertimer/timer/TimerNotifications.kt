@@ -113,10 +113,33 @@ class TimerNotifications(context: Context) {
             lockscreenVisibility = Notification.VISIBILITY_PUBLIC
         }
 
+        // The rest alarm gets its own channel rather than sharing "done", for a
+        // reason that outlives this code: a channel is the unit the *user*
+        // turns off. Someone who mutes the session chime because it interrupts
+        // their work has said nothing about wanting to sleep through the end of
+        // a break, and sharing one channel would take that choice away from
+        // them. It also means the alarm can be silenced on its own if they do
+        // find it too much, without losing everything else.
+        val restAlarm = NotificationChannel(
+            restAlarmChannel,
+            context.getString(R.string.notif_channel_rest_alarm),
+            NotificationManager.IMPORTANCE_HIGH,
+        ).apply {
+            description = context.getString(R.string.notif_channel_rest_alarm_desc)
+            setShowBadge(true)
+            // Played by the app, for the same reason the others are: the
+            // channel cannot loop, cannot escalate, and cannot be stopped by a
+            // button. See TimerFeedback.startRestAlarm.
+            enableVibration(false)
+            setSound(null, null)
+            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+            allowThroughDnd()
+        }
+
         // A channel's importance is fixed once created, so raising it needs a new
         // id. Retire the old ones or they linger in the app's notification
         // settings as dead entries the user can still toggle.
-        val live = setOf(runningChannel, doneChannel, idleChannel)
+        val live = setOf(runningChannel, doneChannel, idleChannel, restAlarmChannel)
         for (retired in RETIRED_CHANNELS) {
             if (retired !in live) runCatching { service.deleteNotificationChannel(retired) }
         }
@@ -124,6 +147,7 @@ class TimerNotifications(context: Context) {
         service.createNotificationChannel(running)
         service.createNotificationChannel(done)
         service.createNotificationChannel(idle)
+        service.createNotificationChannel(restAlarm)
         return moved
     }
 
@@ -218,19 +242,44 @@ class TimerNotifications(context: Context) {
                 serviceAction(TimerService.ACTION_FINISH),
             )
         } else if (rest != null) {
+            val countdown = rest.isCountdown
+            val state = if (countdown) {
+                context.getString(
+                    R.string.notif_rest_goal,
+                    Time.formatMinutes(
+                        rest.durationMinutes,
+                        context.getString(R.string.unit_m),
+                        context.getString(R.string.unit_h),
+                    ),
+                )
+            } else {
+                context.getString(R.string.notif_rest_text)
+            }
+
             builder
                 .setContentTitle(context.getString(R.string.notif_rest_title))
-                .setContentText(context.getString(R.string.notif_rest_text))
-                .setWhen(rest.startedAt)
+                .setContentText(
+                    if (countdown) {
+                        context.getString(
+                            R.string.notif_rest_countdown,
+                            Time.formatClock(rest.remainingSeconds()),
+                        )
+                    } else {
+                        state
+                    }
+                )
+                // A countdown counts toward the instant it lands on; the
+                // stopwatch counts up from where it began.
+                .setWhen(if (countdown) rest.endAt!! else rest.startedAt)
                 .setUsesChronometer(true)
-                .setChronometerCountDown(false)
+                .setChronometerCountDown(countdown)
 
             builder.applyBigClock(
                 title = context.getString(R.string.notif_rest_title),
-                state = context.getString(R.string.notif_rest_text),
-                target = rest.startedAt,
-                countDown = false,
-                progress = null,
+                state = state,
+                target = if (countdown) rest.endAt!! else rest.startedAt,
+                countDown = countdown,
+                progress = if (countdown) rest.progress() else null,
             )
 
             builder.addAction(
@@ -512,6 +561,111 @@ class TimerNotifications(context: Context) {
         runCatching { manager.notify(ID_IDLE, builder.build()) }
     }
 
+    /**
+     * The rest alarm: the one notification in this app that does not take no
+     * for an answer.
+     *
+     * Four things separate it from every other alert here, and each is doing a
+     * specific job:
+     *
+     * - **A full-screen intent.** On a locked or dark screen this is what turns
+     *   the display on and puts the alarm in front of the user instead of in a
+     *   drawer they have to know to open. It degrades to a heads-up banner by
+     *   itself when the permission is not held, so it is always safe to ask.
+     * - **Ongoing, with no auto-cancel.** The alarm outlives a tap on the body.
+     * - **A delete intent that puts it straight back.** A swipe is how a
+     *   notification is normally acknowledged, and here it must not be:
+     *   dismissing this by reflex from a lock screen is exactly how a rest
+     *   silently becomes an hour. Only the Dismiss action clears it.
+     * - **`CATEGORY_ALARM`.** The class Do Not Disturb lets through under its
+     *   own "allow alarms" rule, which is on by default on every Android build.
+     *
+     * [loud] is false once the ring has run its course, which softens the words
+     * without withdrawing the notification — the message is still the message
+     * when the noise has stopped.
+     */
+    fun showRestAlarm(durationMinutes: Int, loud: Boolean) {
+        if (!canPost()) return
+
+        val minutes = Time.formatMinutes(
+            durationMinutes,
+            context.getString(R.string.unit_m),
+            context.getString(R.string.unit_h),
+        )
+        val text = context.getString(
+            if (loud) R.string.notif_rest_alarm_text else R.string.notif_rest_alarm_text_quiet,
+            minutes,
+        )
+
+        val builder = NotificationCompat.Builder(context, restAlarmChannel)
+            .setSmallIcon(R.drawable.ic_stat_tree)
+            .setColor(ContextCompat.getColor(context, R.color.timber_accent))
+            .setContentTitle(context.getString(R.string.notif_rest_alarm_title))
+            .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setContentIntent(alarmActivity(fullScreen = false))
+            .setOngoing(true)
+            .setAutoCancel(false)
+            .setDeleteIntent(restoreAlarmIntent())
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            // Counts up from the moment the rest ran out, so a user coming back
+            // to it knows whether they lost two minutes or twenty.
+            .setShowWhen(true)
+            .setUsesChronometer(true)
+            .setWhen(System.currentTimeMillis())
+            .addAction(
+                0,
+                context.getString(R.string.notif_action_rest_dismiss),
+                serviceAction(TimerService.ACTION_DISMISS_REST_ALARM),
+            )
+            .addAction(
+                0,
+                context.getString(R.string.notif_action_rest_extend),
+                serviceAction(TimerService.ACTION_EXTEND_REST),
+            )
+
+        // Only while it is actually ringing. Asking for a full-screen takeover
+        // after the noise has stopped would drag the user out of whatever they
+        // are doing to tell them something that is no longer happening.
+        if (loud && canUseFullScreen()) {
+            builder.setFullScreenIntent(alarmActivity(fullScreen = true), true)
+        }
+
+        runCatching { manager.notify(ID_REST_ALARM, builder.build()) }
+    }
+
+    fun cancelRestAlarm() {
+        runCatching { manager.cancel(ID_REST_ALARM) }
+    }
+
+    /**
+     * Whether the platform will honour a full-screen intent.
+     *
+     * From Android 14 this is granted at install only to apps the store filed
+     * as alarms or calling apps, and has to be asked for otherwise. A refusal
+     * is not fatal — the notification still arrives as a heads-up banner — so
+     * this only decides whether to ask for the takeover, never whether to
+     * alarm at all.
+     */
+    fun canUseFullScreen(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) return true
+        val service = context.getSystemService(NotificationManager::class.java) ?: return false
+        return runCatching { service.canUseFullScreenIntent() }.getOrDefault(false)
+    }
+
+    private fun alarmActivity(fullScreen: Boolean): PendingIntent {
+        val intent = Intent(context, RestAlarmActivity::class.java)
+            .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+        return PendingIntent.getActivity(
+            context,
+            if (fullScreen) REQUEST_ALARM_FULL else REQUEST_ALARM_TAP,
+            intent,
+            IMMUTABLE,
+        )
+    }
+
     fun cancelIdle() {
         runCatching { manager.cancel(ID_IDLE) }
     }
@@ -584,6 +738,12 @@ class TimerNotifications(context: Context) {
         return PendingIntent.getBroadcast(context, REQUEST_RESTORE, intent, IMMUTABLE)
     }
 
+    private fun restoreAlarmIntent(): PendingIntent {
+        val intent = Intent(context, NotificationRestorer::class.java)
+            .setAction(NotificationRestorer.ACTION_RESTORE_ALARM)
+        return PendingIntent.getBroadcast(context, REQUEST_RESTORE_ALARM, intent, IMMUTABLE)
+    }
+
     // ---------- Do Not Disturb ----------
 
     /**
@@ -630,11 +790,13 @@ class TimerNotifications(context: Context) {
     private val runningChannel: String get() = CHANNEL_RUNNING + generation
     private val doneChannel: String get() = CHANNEL_DONE + generation
     private val idleChannel: String get() = CHANNEL_IDLE + generation
+    private val restAlarmChannel: String get() = CHANNEL_REST_ALARM + generation
 
     companion object {
         const val CHANNEL_RUNNING = "timer-running-v2"
         const val CHANNEL_DONE = "timer-done"
         const val CHANNEL_IDLE = "timer-idle"
+        const val CHANNEL_REST_ALARM = "rest-alarm"
 
         /** Marks the channel generation created with Do Not Disturb bypass. */
         private const val DND_SUFFIX = "-dnd"
@@ -650,21 +812,34 @@ class TimerNotifications(context: Context) {
             CHANNEL_RUNNING,
             CHANNEL_DONE,
             CHANNEL_IDLE,
+            CHANNEL_REST_ALARM,
             CHANNEL_RUNNING + DND_SUFFIX,
             CHANNEL_DONE + DND_SUFFIX,
             CHANNEL_IDLE + DND_SUFFIX,
+            CHANNEL_REST_ALARM + DND_SUFFIX,
         )
 
         const val ID_RUNNING = 1001
         const val ID_DONE = 1002
         const val ID_IDLE = 1003
+        const val ID_REST_ALARM = 1004
 
         /**
-         * Request code for the one delete intent left. Kept at the value the
-         * ongoing notification has always used, so an update does not orphan a
-         * token already sitting on a posted notification.
+         * Request codes for the delete intents. [REQUEST_RESTORE] is kept at the
+         * value the ongoing notification has always used, so an update does not
+         * orphan a token already sitting on a posted notification.
          */
         private const val REQUEST_RESTORE = 1
+        private const val REQUEST_RESTORE_ALARM = 2
+
+        /**
+         * The alarm activity is reached two ways and they must stay distinct:
+         * extras are not part of a PendingIntent's identity, but the request
+         * code is, and a full-screen intent sharing a token with a content
+         * intent would have FLAG_UPDATE_CURRENT quietly rewrite one of them.
+         */
+        private const val REQUEST_ALARM_FULL = 3
+        private const val REQUEST_ALARM_TAP = 4
 
         /** Where a ticking clock stops being encouragement and starts nagging. */
         private const val DAY_MS = 24 * 60 * 60 * 1000L

@@ -14,6 +14,7 @@ import com.example.timbertimer.data.model.Note
 import com.example.timbertimer.data.model.Project
 import com.example.timbertimer.data.model.ProjectBook
 import com.example.timbertimer.data.model.Projects
+import com.example.timbertimer.data.model.RestTimer
 import com.example.timbertimer.data.model.TimerMode
 import com.example.timbertimer.data.model.TreeSpecies
 import com.example.timbertimer.data.remote.ActiveTimerUpsert
@@ -91,6 +92,16 @@ class TimberRepository(
     private var projectsTableMissing = false
     private var sessionProjectColumnMissing = false
     private var activeTimerProjectColumnMissing = false
+
+    /**
+     * The same latch for `active_rest_timers.end_at` / `.duration_minutes`.
+     *
+     * Unlike the project columns this one costs nothing visible: a rest whose
+     * length cannot cross to another device is still a rest, and still alarms
+     * on the device that started it, because the alarm is scheduled locally
+     * from an instant that never leaves the phone.
+     */
+    private var restCountdownColumnsMissing = false
 
     private val _projectsSyncBlocked = MutableStateFlow(false)
 
@@ -900,28 +911,56 @@ class TimberRepository(
     suspend fun fetchCloudRest(): CloudRest {
         val user = _session.value ?: return CloudRest.Unavailable
         val token = auth.validAccessToken() ?: return CloudRest.Unavailable
-        val row = runCatching { api.fetchRestTimer(token, user.userId) }
+        val row = runCatching { api.fetchRestTimer(token, user.userId, !restCountdownColumnsMissing) }
+            .recoverCatching { error ->
+                // Only the server saying the column is absent may latch this;
+                // a lost packet must not silently turn every countdown on this
+                // account into a stopwatch for the rest of the session.
+                if (restCountdownColumnsMissing || !error.isMissingSchema()) throw error
+                restCountdownColumnsMissing = true
+                api.fetchRestTimer(token, user.userId, withCountdown = false)
+            }
             .getOrElse {
                 logSync(it)
                 return CloudRest.Unavailable
             }
         val startedAt = Time.parseIso(row?.startedAt) ?: return CloudRest.None
-        return CloudRest.Running(startedAt)
+        return CloudRest.Running(
+            startedAt = startedAt,
+            endAt = Time.parseIso(row?.endAt),
+            durationMinutes = row?.durationMinutes ?: 0,
+        )
     }
 
-    suspend fun pushCloudRest(startedAt: Long) {
-        val user = _session.value ?: return
-        val token = auth.validAccessToken() ?: return
-        runCatching {
-            api.upsertRestTimer(
-                token,
-                RestTimerUpsert(
-                    userId = user.userId,
-                    startedAt = Time.toIso(startedAt),
-                    updatedAt = Time.toIso(System.currentTimeMillis()),
-                ),
-            )
-        }.onFailure { logSync(it) }
+    /**
+     * Returns true only when the row actually landed.
+     *
+     * The same contract [pushCloudTimer] has, for a milder version of the same
+     * reason: a rest wrongly believed to be published would be dropped by the
+     * next sync — which finds no row and concludes another device ended it —
+     * taking a running countdown and its alarm with it.
+     */
+    suspend fun pushCloudRest(rest: RestTimer): Boolean {
+        val user = _session.value ?: return false
+        val token = auth.validAccessToken() ?: return false
+        val row = RestTimerUpsert(
+            userId = user.userId,
+            startedAt = Time.toIso(rest.startedAt),
+            endAt = rest.endAt?.let(Time::toIso),
+            durationMinutes = rest.durationMinutes,
+            updatedAt = Time.toIso(System.currentTimeMillis()),
+        )
+        return runCatching { api.upsertRestTimer(token, row, !restCountdownColumnsMissing) }
+            .recoverCatching { error ->
+                // An older database still syncs the rest, just without its
+                // length: the other device sees a stopwatch, which is what every
+                // rest was before this feature and is never wrong, only vaguer.
+                if (restCountdownColumnsMissing || !error.isMissingSchema()) throw error
+                restCountdownColumnsMissing = true
+                api.upsertRestTimer(token, row, withCountdown = false)
+            }
+            .onFailure { logSync(it) }
+            .isSuccess
     }
 
     suspend fun clearCloudRest() {
@@ -986,5 +1025,10 @@ sealed interface CloudRest {
 
     data object None : CloudRest
 
-    data class Running(val startedAt: Long) : CloudRest
+    /** [endAt] null is the open-ended stopwatch, and what an older row reads as. */
+    data class Running(
+        val startedAt: Long,
+        val endAt: Long? = null,
+        val durationMinutes: Int = 0,
+    ) : CloudRest
 }

@@ -6,9 +6,11 @@ import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioTrack
 import android.os.Build
+import android.os.VibrationAttributes
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
+import com.example.timbertimer.data.local.RestAlertStyle
 import com.example.timbertimer.data.local.SettingsStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -42,6 +44,17 @@ class TimerFeedback(
 
     private val appContext = context.applicationContext
     private var track: AudioTrack? = null
+
+    /**
+     * The rest alarm's own track, kept apart from [track] on purpose.
+     *
+     * The two can overlap — a focus countdown can land while a rest alarm is
+     * still ringing — and sharing one field would have the quieter of them
+     * release the louder mid-ring. This one also outlives its caller: it loops
+     * in the audio hardware rather than being re-fed by a coroutine, so a
+     * throttled or dozing process cannot make it skip.
+     */
+    private var alarmTrack: AudioTrack? = null
 
     /**
      * Cues are built and started here rather than on the caller's thread.
@@ -105,6 +118,146 @@ class TimerFeedback(
             runCatching { vibrator.vibrate(pattern, -1) }
         }
     }
+
+    // ---------- the rest alarm ----------
+
+    /**
+     * Starts the rest alarm and leaves it running until [stopRestAlarm].
+     *
+     * Both halves loop in hardware rather than being re-fed from Kotlin: the
+     * [AudioTrack] repeats its buffer through its own loop points, and the
+     * vibrator repeats its waveform from index 0. That is what makes the alarm
+     * survive the thing most likely to happen to it — the process being dozed,
+     * throttled, or descheduled at the exact moment it is supposed to be making
+     * noise. Nothing has to run for it to keep ringing.
+     *
+     * Neither half consults the focus-chime switches. Those govern a cue; this
+     * is an alarm, and it answers to [SettingsStore.restAlert] alone.
+     */
+    fun startRestAlarm() {
+        val style = settings.restAlert.value
+        if (style.wantsSound) {
+            audioScope.launch {
+                val samples = buildRestAlarmCycle()
+                audioLock.withLock { loopAlarm(samples) }
+            }
+        }
+        if (style.wantsVibration) vibrateRestAlarm()
+    }
+
+    fun stopRestAlarm() {
+        stopAlarmVibration()
+        audioScope.launch {
+            audioLock.withLock {
+                runCatching { alarmTrack?.pause() }
+                releaseAlarm()
+            }
+        }
+    }
+
+    /**
+     * One cycle of whatever [style] would do, for auditioning the setting.
+     *
+     * Plays the real thing at the real level rather than a polite sample: the
+     * point of the audition is to find out whether this will actually wake you,
+     * and a quieter preview would answer a different question. It stops itself
+     * after a single cycle, which is what keeps it a preview.
+     */
+    fun previewRestAlarm(style: RestAlertStyle = settings.restAlert.value) {
+        if (style.wantsSound) {
+            audioScope.launch {
+                val samples = buildRestAlarmCycle()
+                audioLock.withLock { playAlarmOnce(samples) }
+            }
+        }
+        if (style.wantsVibration) previewAlarmVibration()
+    }
+
+    /** The alarm's waveform, played through exactly once. */
+    @SuppressLint("MissingPermission")
+    private fun previewAlarmVibration() {
+        val vibrator = vibrator() ?: return
+        if (!vibrator.hasVibrator()) return
+
+        val pattern = longArrayOf(0, 600, 250, 300, 250, 600)
+        val amplitudes = intArrayOf(0, 255, 0, 255, 0, 255)
+
+        runCatching {
+            when {
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU -> vibrator.vibrate(
+                    VibrationEffect.createWaveform(pattern, amplitudes, -1),
+                    VibrationAttributes.createForUsage(VibrationAttributes.USAGE_ALARM),
+                )
+
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.O -> {
+                    @Suppress("DEPRECATION")
+                    vibrator.vibrate(
+                        VibrationEffect.createWaveform(pattern, amplitudes, -1),
+                        alarmAudioAttributes(),
+                    )
+                }
+
+                else -> {
+                    @Suppress("DEPRECATION")
+                    vibrator.vibrate(pattern, -1, alarmAudioAttributes())
+                }
+            }
+        }
+    }
+
+    /**
+     * The repeating buzz, attributed as an alarm.
+     *
+     * The attributes are the entire point of this method existing separately
+     * from [vibrateCompletion]. A bare `vibrate(effect)` is filed as a
+     * notification and is silently dropped under Do Not Disturb, and by the
+     * ring-mode-silent policy on many OEM builds — which is precisely when a
+     * rest alarm most needs to land. `USAGE_ALARM` is the class the platform
+     * lets through under its own "allow alarms" rule.
+     */
+    @SuppressLint("MissingPermission")
+    private fun vibrateRestAlarm() {
+        val vibrator = vibrator() ?: return
+        if (!vibrator.hasVibrator()) return
+
+        // Long, short, long — a pattern that reads as insistent rather than as
+        // a message arriving, and repeats from the top forever.
+        val pattern = longArrayOf(0, 600, 250, 300, 250, 600, 900)
+        val amplitudes = intArrayOf(0, 255, 0, 255, 0, 255, 0)
+
+        runCatching {
+            when {
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU -> {
+                    val effect = VibrationEffect.createWaveform(pattern, amplitudes, 0)
+                    vibrator.vibrate(
+                        effect,
+                        VibrationAttributes.createForUsage(VibrationAttributes.USAGE_ALARM),
+                    )
+                }
+
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.O -> {
+                    val effect = VibrationEffect.createWaveform(pattern, amplitudes, 0)
+                    @Suppress("DEPRECATION")
+                    vibrator.vibrate(effect, alarmAudioAttributes())
+                }
+
+                else -> {
+                    @Suppress("DEPRECATION")
+                    vibrator.vibrate(pattern, 0, alarmAudioAttributes())
+                }
+            }
+        }
+    }
+
+    private fun stopAlarmVibration() {
+        runCatching { vibrator()?.cancel() }
+    }
+
+    private fun alarmAudioAttributes(): AudioAttributes =
+        AudioAttributes.Builder()
+            .setUsage(AudioAttributes.USAGE_ALARM)
+            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+            .build()
 
     private fun vibrator(): Vibrator? =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -171,6 +324,114 @@ class TimerFeedback(
         }
 
         return applyGain(mix, samples)
+    }
+
+    /**
+     * One cycle of the rest alarm: three rising beeps, then a gap.
+     *
+     * Deliberately not the session chime. That one resolves — it is a full stop,
+     * and a full stop repeated forty times still sounds like good news. This
+     * rises and does not resolve, which is what makes a sound read as a demand,
+     * and it sits high enough (880-1318 Hz) to carry through a pocket and over
+     * a room, where the chime's low C would not.
+     *
+     * The gap matters as much as the beeps: an unbroken tone is easy for a
+     * half-asleep ear to fold into the background, and impossible to talk over
+     * if the user is mid-sentence when it lands.
+     */
+    private fun buildRestAlarmCycle(): ShortArray {
+        val cycleSeconds = 2.2
+        val samples = ShortArray((cycleSeconds * SAMPLE_RATE).toInt())
+        val mix = DoubleArray(samples.size)
+
+        // A, C#, E an octave up — the same triad the chime uses, climbing
+        // instead of settling.
+        val frequencies = doubleArrayOf(880.0, 1108.73, 1318.51)
+        val beepLength = 0.30
+
+        frequencies.forEachIndexed { index, frequency ->
+            val start = (index * 0.36 * SAMPLE_RATE).toInt()
+            val length = (beepLength * SAMPLE_RATE).toInt()
+            for (i in 0 until length) {
+                val at = start + i
+                if (at >= mix.size) break
+                val t = i.toDouble() / SAMPLE_RATE
+                // A near-square attack and a hard cut: no bell-like decay, which
+                // would blur the three beeps into one wash.
+                val envelope = min(1.0, t / 0.008) *
+                    min(1.0, ((beepLength - t) / 0.03).coerceAtLeast(0.0))
+                // Square-ish through a triangle plus its fifth harmonic: cuts
+                // through far better than a sine at the same measured level.
+                val phase = at.toDouble() / SAMPLE_RATE
+                mix[at] += (triangle(frequency, phase) * 0.5 +
+                    triangle(frequency * 2.0, phase) * 0.18) * envelope * 0.62
+            }
+        }
+
+        return applyAlarmGain(mix, samples)
+    }
+
+    /**
+     * The alarm's own level, floored at full scale.
+     *
+     * The chime's slider is allowed to raise this and not to lower it. Someone
+     * who turned the chime down did so to be less disturbed while focusing,
+     * which says nothing about whether they want to be woken from a break — and
+     * an alarm quiet enough to sleep through is not an alarm.
+     */
+    private fun applyAlarmGain(mix: DoubleArray, out: ShortArray): ShortArray {
+        val gain = settings.soundVolume.value.coerceIn(1f, 2f)
+        for (i in mix.indices) {
+            val value = (mix[i] * gain * Short.MAX_VALUE).coerceIn(MIN_SAMPLE, MAX_SAMPLE)
+            out[i] = value.roundToInt().toShort()
+        }
+        return out
+    }
+
+    /**
+     * Plays [samples] on repeat until stopped.
+     *
+     * `MODE_STATIC` puts the whole cycle in the track's own buffer and
+     * `setLoopPoints(..., -1)` repeats it in the audio hardware, so once this
+     * returns there is nothing left for the app to do or to fail to do.
+     */
+    private fun loopAlarm(samples: ShortArray) {
+        if (samples.isEmpty()) return
+        releaseAlarm()
+
+        val created = runCatching {
+            AudioTrack.Builder()
+                .setAudioAttributes(alarmAudioAttributes())
+                .setAudioFormat(
+                    AudioFormat.Builder()
+                        .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                        .setSampleRate(SAMPLE_RATE)
+                        .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                        .build()
+                )
+                .setBufferSizeInBytes(samples.size * 2)
+                .setTransferMode(AudioTrack.MODE_STATIC)
+                .build()
+        }.getOrNull() ?: return
+
+        runCatching {
+            created.write(samples, 0, samples.size)
+            // -1 is "loop forever"; the frame count is the whole buffer.
+            created.setLoopPoints(0, samples.size, -1)
+            created.play()
+            alarmTrack = created
+        }.onFailure { created.release() }
+    }
+
+    /** The same track without the loop points, for the settings audition. */
+    private fun playAlarmOnce(samples: ShortArray) {
+        loopAlarm(samples)
+        runCatching { alarmTrack?.setLoopPoints(0, 0, 0) }
+    }
+
+    private fun releaseAlarm() {
+        alarmTrack?.let { existing -> runCatching { existing.release() } }
+        alarmTrack = null
     }
 
     /** Band-limited enough for this purpose, and matches the web app's timbre. */

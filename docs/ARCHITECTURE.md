@@ -28,11 +28,13 @@ app/src/main/java/com/example/timbertimer/
     remote/              Supabase auth (PKCE), PostgREST, Realtime
 
   timer/
-    TimerEngine.kt       owns the running timer; application-scoped
+    TimerEngine.kt       owns the running timer and rest; application-scoped
     TimerService.kt      foreground service: process priority + notification
     TimerNotifications.kt  channels, the ongoing notification, alerts
     TimerAlarms.kt       exact-alarm backstop, boot restore
     TimerFeedback.kt     PCM chime synthesis and vibration
+    RestAlarm.kt         the stubborn alarm that ends a rest countdown
+    RestAlarmActivity.kt its full-screen face, shown over the lock screen
 
   ui/                    Compose screens, the eight trees, theme
   widget/                the home screen to-do widget
@@ -172,6 +174,62 @@ Three things notice that it is due, and they all funnel into one guarded
 `complete()` holds a mutex and a `completing` flag, so whichever arrives second
 finds the work already done.
 
+## A rest ends on an instruction, a session ends with news
+
+Both are countdowns and they share `endAt`, the ticker and the exact-alarm
+backstop. They part company at the moment they land, and the difference is worth
+stating because it explains everything asymmetric about `RestAlarm`:
+
+|  | a focus session finishing | a rest finishing |
+|---|---|---|
+| what it is | news — the tree is planted either way | an instruction the user set for themselves |
+| missing it costs | nothing | the thing the feature exists to prevent |
+| so it gets | one chime, `CATEGORY_ALARM` | a looping alarm, a full-screen takeover, an undismissable notification |
+
+A rest with no `endAt` is the original open-ended stopwatch. It never becomes
+due and never alarms, which is why it is still offered: a rest you are content
+to leave running is a genuinely different intention from one you want to be
+pulled out of.
+
+**The record is written before the noise starts.** `completeRestIfDue` runs the
+whole of `finishRest` — plant the tree, clear the shared row, count the minutes
+— and only then calls `RestAlarm.fire`. An alarm ignored for an hour, or a
+process killed while it rings, therefore cannot cost the session.
+
+Five things can defeat an alarm, and each needs its own answer:
+
+| Against | What answers it |
+|---|---|
+| the process being killed | a second exact alarm, on its own request code |
+| Doze / battery saver | `setExactAndAllowWhileIdle`, and a wake lock while ringing |
+| silent mode | `USAGE_ALARM` on the sound **and** on the vibration |
+| Do Not Disturb | `CATEGORY_ALARM`, plus the channel's DND bypass where granted |
+| a locked, dark screen | a full-screen intent into `RestAlarmActivity` |
+
+The vibration attributes are the easiest of these to get wrong, because leaving
+them off looks like it works: a bare `vibrate(effect)` is filed as a
+notification and is silently dropped under DND and by the ring-mode policy on
+many OEM builds — exactly when a rest alarm most needs to land.
+
+Both the looping `AudioTrack` and the repeating waveform are **owned by this
+process and stop when it does**, so the failure mode is silence rather than a
+phone that will not shut up. That is also why a ringing alarm is one of
+`serviceWanted()`'s reasons: the rest it belongs to has already been recorded
+and cleared by the time it rings, so without it the process would become
+killable at the exact moment it is supposed to be making a noise.
+
+**It stops after two minutes.** Not because a shorter alarm is more reliable,
+but because the common case for an unanswered one is a phone on a desk while its
+owner is two rooms away, and a device that shrieks for an hour gets the feature
+switched off for good. What survives the cap is the notification, which is what
+actually carries the message — ongoing, no auto-cancel, and with a delete intent
+that puts it straight back, so only the Dismiss action clears it.
+
+`RestAlarmActivity` is a separate activity in its own task, not a dialog in
+`MainActivity`, because a full-screen intent has to launch into a locked device
+without unlocking it. It shows only that a rest ended and how long it ran, which
+is safe above the keyguard; the records and the to-do list are not.
+
 ## Two devices, one record
 
 Both the phone and the website can be watching the same countdown. Whichever one
@@ -270,6 +328,7 @@ for this request rather than replayed from another.
 | `timer-running-v2` | DEFAULT | LOW files it under "Silent", which most lock screens and nearly every OEM skin hide. The running timer is the one thing that must be readable without unlocking. Sound and vibration are stripped at the channel instead. |
 | `timer-done` | HIGH | It is an alarm. |
 | `timer-idle` | LOW | An invitation sitting in the shade, not an alert. |
+| `rest-alarm` | HIGH | It is an alarm in the literal sense. Separate from `timer-done` because **a channel is the unit the user turns off**: someone who mutes the session chime because it interrupts their work has said nothing about wanting to sleep through the end of a break. |
 
 A channel's importance is **fixed once created**, so raising it required a new
 id; the old one is deleted on upgrade so it does not linger in settings. Sound
@@ -299,12 +358,17 @@ Two constraints that are easy to trip over:
 
 ## Testing
 
-`./gradlew testDebugUnitTest` — 53 tests, all off-device:
+`./gradlew testDebugUnitTest` — 64 tests, all off-device:
 
 - **`SeedParityTest`** — the hash, the species and colour a name picks, the tree
   palette a colour produces, the readable ink per theme, and the jitter, against
   Node-generated expectations from the web client.
-- **`TimerLogicTest`** — clock-derived timing including the reboot case, the
+- **`TimerLogicTest`** — the rest countdown's arithmetic among them: that it
+  reads from the clock, that one whose moment passed while the phone was off is
+  simply due, that the open-ended rest never becomes due at all, that progress
+  is measured between the two instants (so a row that lost `duration_minutes` to
+  an un-migrated database still draws a correct bar), and that a rest which ran
+  out is credited for its whole length. Also clock-derived timing including the reboot case, the
   table's clamps, how a pre-projects row is mapped to a project (with and
   without the `status` an older build wrote), the built-ins'
   sort order, the deleted-project fallback, Sunday-start weeks, and both

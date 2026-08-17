@@ -13,6 +13,34 @@ import kotlinx.serialization.json.Json
 enum class ThemeMode { SYSTEM, LIGHT, DARK }
 
 /**
+ * How the end of a rest announces itself.
+ *
+ * Deliberately its own setting rather than a reading of the two switches above
+ * it. Those govern a *cue* — the chime a finished focus session ends on, which
+ * is pleasant to have and no loss to miss. This governs an *alarm*: the whole
+ * reason a rest has a length is that the user intends to be pulled out of it,
+ * and someone who silences the chime while they work has said nothing about
+ * whether they want to be woken from a break.
+ */
+enum class RestAlertStyle(val wire: String) {
+    /** Both, which is what actually gets through a pocket. */
+    BOTH("both"),
+    SOUND("sound"),
+    VIBRATE("vibrate"),
+
+    /** The notification alone: still stubborn, just not loud. */
+    SILENT("silent");
+
+    val wantsSound: Boolean get() = this == BOTH || this == SOUND
+    val wantsVibration: Boolean get() = this == BOTH || this == VIBRATE
+
+    companion object {
+        fun from(value: String?): RestAlertStyle =
+            entries.firstOrNull { it.wire == value } ?: BOTH
+    }
+}
+
+/**
  * Per-device preferences: appearance, sound, and the small pieces of state that
  * make the app feel like it remembers you — the last session name, the duration
  * you usually pick, and which tree each session name grows.
@@ -116,6 +144,46 @@ class SettingsStore(context: Context) {
         val safe = minutes.coerceIn(1, Limits.TIMER_MINUTES_MAX)
         prefs.edit().putInt(KEY_DURATION, safe).apply()
         _duration.value = safe
+    }
+
+    // ---------- rest defaults ----------
+
+    /**
+     * Whether the rest panel counts down to a length or simply runs.
+     *
+     * A countdown is the default now: a rest you have to remember to end is the
+     * one that quietly becomes an hour, which is the whole reason the shortcuts
+     * exist. The open-ended stopwatch is still one tap away for anyone who
+     * preferred it, and is what an upgrade finds mid-rest.
+     */
+    private val _restMode = MutableStateFlow(TimerMode.from(prefs.getString(KEY_REST_MODE, null)))
+    val restMode: StateFlow<TimerMode> = _restMode.asStateFlow()
+
+    fun setRestMode(mode: TimerMode) {
+        prefs.edit().putString(KEY_REST_MODE, mode.wire).apply()
+        _restMode.value = mode
+    }
+
+    private val _restDuration = MutableStateFlow(
+        prefs.getInt(KEY_REST_DURATION, Limits.DEFAULT_REST_DURATION)
+            .coerceIn(1, Limits.TIMER_MINUTES_MAX)
+    )
+    val restDuration: StateFlow<Int> = _restDuration.asStateFlow()
+
+    fun setRestDuration(minutes: Int) {
+        val safe = minutes.coerceIn(1, Limits.TIMER_MINUTES_MAX)
+        prefs.edit().putInt(KEY_REST_DURATION, safe).apply()
+        _restDuration.value = safe
+    }
+
+    private val _restAlert = MutableStateFlow(
+        RestAlertStyle.from(prefs.getString(KEY_REST_ALERT, null))
+    )
+    val restAlert: StateFlow<RestAlertStyle> = _restAlert.asStateFlow()
+
+    fun setRestAlert(style: RestAlertStyle) {
+        prefs.edit().putString(KEY_REST_ALERT, style.wire).apply()
+        _restAlert.value = style
     }
 
     private val _sessionName = MutableStateFlow(prefs.getString(KEY_SESSION_NAME, null).orEmpty())
@@ -229,6 +297,9 @@ class SettingsStore(context: Context) {
         private const val KEY_BACKGROUND_SYNC = "background-sync"
         private const val KEY_TIMER_MODE = "timer-mode"
         private const val KEY_DURATION = "duration"
+        private const val KEY_REST_MODE = "rest-mode"
+        private const val KEY_REST_DURATION = "rest-duration"
+        private const val KEY_REST_ALERT = "rest-alert"
         private const val KEY_SESSION_NAME = "session-name"
         private const val KEY_TREE_PREFS = "tree-prefs"
         private const val KEY_PROJECT = "selected-project"

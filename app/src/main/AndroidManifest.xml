@@ -29,6 +29,20 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <!--
+      Lets the end of a rest turn the screen on and show itself over the lock
+      screen, the way a clock alarm does. A rest countdown is an alarm in the
+      literal sense — the user set a time and asked to be pulled out of
+      something at it — which is the use this permission is for.
+
+      From Android 14 it is granted at install only to apps the store has filed
+      as alarms or calling apps, and has to be asked for otherwise; the app
+      offers that from Settings. Not holding it costs the takeover and nothing
+      else: the alarm still sounds, still vibrates, and still arrives as a
+      heads-up notification.
+    -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+
+    <!--
       Only used to *offer* the exemption dialog from Settings; Android grants it
       on the user's say-so, never silently. Without it a device can stop the
       background sync a few minutes after the screen goes off.
@@ -92,6 +106,35 @@
         </activity>
 
         <!--
+          The screen a finished rest countdown puts in front of you.
+
+          Its own task (singleInstance, excluded from Recents) rather than a
+          screen inside the app's: it is launched by a full-screen intent onto a
+          locked device, and it must not drag the rest of the app up behind it
+          above the keyguard. It shows nothing but the fact that a rest ended,
+          so it is safe there; the records and the to-do list are not.
+
+          showOnLockScreen and turnScreenOn are also set in code, which is what
+          works on API 27+ and when the activity is re-shown rather than created.
+
+          Deliberately *not* noHistory: that would destroy the sheet the moment
+          the screen went off, so pressing power to look at the phone and then
+          waking it again would leave the alarm ringing with nothing on screen
+          to stop it. It finishes itself when the alarm is answered instead.
+        -->
+        <activity
+            android:name=".timer.RestAlarmActivity"
+            android:exported="false"
+            android:launchMode="singleInstance"
+            android:taskAffinity=""
+            android:excludeFromRecents="true"
+            android:showOnLockScreen="true"
+            android:turnScreenOn="true"
+            android:showWhenLocked="true"
+            android:theme="@style/Theme.TimberTimer"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|density|uiMode|locale|layoutDirection|fontScale" />
+
+        <!--
           Two jobs: keeps a running countdown alive and on screen while the app is
           away, and — when background sync is on — keeps the live sync connection
           open so changes made on the user's other devices reach this one. There
@@ -108,9 +151,10 @@
         </service>
 
         <!--
-          Two alarms land here: the exact one that fires a countdown's completion
-          even if the service was killed, and the quarter-hourly heartbeat that
-          notices the service was killed at all.
+          Three alarms land here: the exact one that fires a countdown's
+          completion even if the service was killed, its twin for a rest
+          countdown, and the quarter-hourly heartbeat that notices the service
+          was killed at all.
         -->
         <receiver
             android:name=".timer.TimerAlarmReceiver"

@@ -70,12 +70,19 @@ class TimerService : Service() {
 
         serviceScope.launch {
             val engine = container.timerEngine
-            combine(engine.timer, engine.rest, engine.now) { timer, rest, _ -> timer to rest }
-                .collect { (timer, rest) ->
+            combine(
+                engine.timer,
+                engine.rest,
+                container.restAlarm.ringing,
+                engine.now,
+            ) { timer, rest, alarm, _ -> Triple(timer, rest, alarm) }
+                .collect { (timer, rest, alarm) ->
                     // Nothing running is no longer a reason to stop: background
                     // sync is the service's other job, and it is the only thing
-                    // keeping the live socket — and so the widget — current.
-                    if (timer == null && rest == null &&
+                    // keeping the live socket — and so the widget — current. A
+                    // ringing alarm is a third, and the one whose absence would
+                    // be heard: the process dying takes the noise with it.
+                    if (timer == null && rest == null && alarm == null &&
                         !container.settings.backgroundSync.value
                     ) {
                         stopSelf()
@@ -92,6 +99,17 @@ class TimerService : Service() {
         when (intent?.action) {
             ACTION_FINISH -> runInApp { container.timerEngine.finish() }
             ACTION_FINISH_REST -> runInApp { container.timerEngine.finishRest() }
+            // Answered synchronously: the user has pressed a button to stop a
+            // noise, and the noise should stop on the press rather than
+            // whenever a coroutine next gets the main thread.
+            ACTION_DISMISS_REST_ALARM -> container.restAlarm.dismiss()
+            // Silenced synchronously, then the new rest is started: the button
+            // was pressed to stop a noise, and waiting on a coroutine to do
+            // that is waiting while it keeps going.
+            ACTION_EXTEND_REST -> {
+                container.restAlarm.dismiss()
+                runInApp { container.timerEngine.restAgainFromAlarm() }
+            }
         }
 
         // A timer the user started should come back if the process is recycled.
@@ -212,6 +230,8 @@ class TimerService : Service() {
     companion object {
         const val ACTION_FINISH = "com.example.timbertimer.FINISH"
         const val ACTION_FINISH_REST = "com.example.timbertimer.FINISH_REST"
+        const val ACTION_DISMISS_REST_ALARM = "com.example.timbertimer.DISMISS_REST_ALARM"
+        const val ACTION_EXTEND_REST = "com.example.timbertimer.EXTEND_REST"
 
         /** Fast enough that the progress bar tracks, slow enough to be free. */
         private const val REPOST_INTERVAL_MS = 5_000L

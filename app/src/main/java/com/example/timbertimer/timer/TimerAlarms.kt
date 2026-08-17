@@ -61,6 +61,47 @@ class TimerAlarms(context: Context) {
     }
 
     /**
+     * The same backstop for a rest countdown, on its own request code.
+     *
+     * It has to be a second alarm rather than a reused one: a focus session and
+     * a rest can run at the same time, and a single PendingIntent would have
+     * whichever was armed second silently cancel the first — which is the sort
+     * of bug that only shows up for the users who do both, and only sometimes.
+     *
+     * If anything, this one matters more than the focus alarm. A focus session
+     * that finishes late still plants its tree for the time it actually ran; a
+     * rest that finishes late is a rest that did not end when the user asked it
+     * to, which is the entire failure this feature exists to prevent.
+     */
+    fun scheduleRest(triggerAtMillis: Long) {
+        val alarmManager = manager ?: return
+        val pending = restIntent()
+
+        val canBeExact = Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
+            alarmManager.canScheduleExactAlarms()
+
+        runCatching {
+            if (canBeExact) {
+                alarmManager.setExactAndAllowWhileIdle(
+                    AlarmManager.RTC_WAKEUP,
+                    triggerAtMillis,
+                    pending,
+                )
+            } else {
+                alarmManager.setAndAllowWhileIdle(
+                    AlarmManager.RTC_WAKEUP,
+                    triggerAtMillis,
+                    pending,
+                )
+            }
+        }
+    }
+
+    fun cancelRest() {
+        runCatching { manager?.cancel(restIntent()) }
+    }
+
+    /**
      * Schedules the next heartbeat: one wake-up, a quarter of an hour out, that
      * checks the app is still where it said it would be.
      *
@@ -103,6 +144,8 @@ class TimerAlarms(context: Context) {
 
     private fun pendingIntent(): PendingIntent = broadcast(REQUEST_CODE, ACTION_DUE)
 
+    private fun restIntent(): PendingIntent = broadcast(REST_REQUEST_CODE, ACTION_REST_DUE)
+
     private fun watchdogIntent(): PendingIntent = broadcast(WATCHDOG_REQUEST_CODE, ACTION_WATCHDOG)
 
     private fun broadcast(requestCode: Int, action: String): PendingIntent =
@@ -115,9 +158,11 @@ class TimerAlarms(context: Context) {
 
     companion object {
         const val ACTION_DUE = "com.example.timbertimer.TIMER_DUE"
+        const val ACTION_REST_DUE = "com.example.timbertimer.REST_DUE"
         const val ACTION_WATCHDOG = "com.example.timbertimer.WATCHDOG"
         private const val REQUEST_CODE = 4201
         private const val WATCHDOG_REQUEST_CODE = 4202
+        private const val REST_REQUEST_CODE = 4203
 
         /**
          * Fifteen minutes: the shortest interval Doze will honour for a
@@ -147,6 +192,14 @@ class TimerAlarmReceiver : BroadcastReceiver() {
 
         container.scope.launch {
             try {
+                // The rest is answered from the clock before the network is
+                // touched. hydrate() would get there eventually, but it fetches
+                // two shared rows first, and on a phone that has just woken up
+                // with no signal that is seconds of silence — during which the
+                // user is waiting for an alarm they set.
+                if (intent.action == TimerAlarms.ACTION_REST_DUE) {
+                    container.timerEngine.onRestDue()
+                }
                 container.timerEngine.hydrate()
             } finally {
                 pending.finish()

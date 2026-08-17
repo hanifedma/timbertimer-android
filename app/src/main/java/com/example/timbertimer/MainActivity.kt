@@ -112,6 +112,7 @@ class MainActivity : ComponentActivity() {
                     onAddWidget = ::requestPinWidget,
                     onIgnoreBatteryOptimisation = ::requestIgnoreBatteryOptimisation,
                     onAllowDoNotDisturb = ::requestDoNotDisturbAccess,
+                    onAllowFullScreen = ::requestFullScreenAlerts,
                 )
             }
         }
@@ -243,6 +244,35 @@ class MainActivity : ComponentActivity() {
             startActivity(Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS))
         } catch (_: ActivityNotFoundException) {
             Toast.makeText(this, R.string.settings_dnd_unsupported, Toast.LENGTH_LONG).show()
+        }
+    }
+
+    /**
+     * Opens the platform's full-screen-alert setting for this app.
+     *
+     * From Android 14 the permission is declared but not granted, unless the
+     * store filed the app as an alarm or calling app — so the manifest entry is
+     * only half of it, and this is the other half. Older versions grant it at
+     * install and have no screen to send anyone to, which is what the "already"
+     * branch covers.
+     */
+    private fun requestFullScreenAlerts() {
+        val notifications = (application as TimberApplication).container.notifications
+        if (notifications.canUseFullScreen()) {
+            Toast.makeText(this, R.string.settings_full_screen_already, Toast.LENGTH_LONG).show()
+            return
+        }
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            Toast.makeText(this, R.string.settings_full_screen_unsupported, Toast.LENGTH_LONG).show()
+            return
+        }
+        try {
+            startActivity(
+                Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT)
+                    .setData(Uri.fromParts("package", packageName, null))
+            )
+        } catch (_: ActivityNotFoundException) {
+            Toast.makeText(this, R.string.settings_full_screen_unsupported, Toast.LENGTH_LONG).show()
         }
     }
 

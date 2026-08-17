@@ -34,7 +34,7 @@ Everything the web app does, plus what only a phone can:
 | **Tasks remember their project** | Track "wash dishes" under Errands once and choosing that task picks Errands again by itself, on any device. |
 | **A tree per project** | Seven species, chosen by tapping the tree rather than reading a dropdown. Records are drawn with whatever their project grows now, so changing it re-plants the forest. |
 | **Forest** | Day / week / month, each steppable backwards, with every tree drawn at the size its session earned and in its project's colour. |
-| **Rest stopwatch** | Rest is a project like any other, so a rest can also be added by hand; rests under a minute are dropped. |
+| **Rest timer** | 5 / 10 / 15 minutes or any length you type, with a stubborn alarm when it lands — see below. Or run it open-ended, the way it always did. Rest is a project like any other, so a rest can also be added by hand; rests under a minute are dropped. |
 | **To-do list** | Drag by the grip handle to reorder, synced when signed in. |
 | **Focus history** | Searchable, editable, with today/total stats. |
 | **Google sync** | The same account, the same five tables, the same rows — through Android's own account sheet, so the prompt names this app rather than a Supabase address. |
@@ -164,6 +164,35 @@ It restarts itself after a reboot, and **Settings → Ignore battery optimisatio
 opens Android's own exemption dialog. Be aware that no app can truly be immune:
 several manufacturers stop background work regardless of what that dialog says,
 and that is a decision made below the app.
+
+### The rest alarm
+
+A break that ends quietly is a break that becomes an hour, so the end of a rest
+countdown is treated as an alarm rather than as a notification — and it is built
+to get through the five things that normally swallow one:
+
+| | |
+|---|---|
+| **Silent mode** | The tone and the buzz are both played as *alarms*, which is the class Android exempts from the ringer being off. |
+| **Do Not Disturb** | The alarm is filed under `CATEGORY_ALARM`, which DND's own "allow alarms" rule lets through by default. **Settings → Allow alerts in Do Not Disturb** adds the channel-level bypass on top. |
+| **Battery saver / Doze** | An exact alarm is scheduled for the instant the rest ends, and a wake lock is held while it rings. |
+| **The app being killed** | That alarm fires whether or not the app is still running, and re-starts it. |
+| **A locked, dark screen** | It turns the screen on and shows itself over the lock screen, the way a clock alarm does. On Android 14+ that needs **Settings → Show rest alarm over the lock screen**; without it, the alarm still sounds and still appears in the shade. |
+
+It rings for two minutes and then falls quiet — deliberately finite, because the
+usual reason an alarm goes unanswered is a phone left on a desk two rooms away,
+and something that shrieks for an hour gets switched off for good. What survives
+the two minutes is the notification, which **cannot be swiped away**: only
+*Dismiss* (or opening the app) clears it.
+
+**Settings → Rest alarm** chooses sound, buzz, both, or silent, and auditions
+the choice as you make it. It is a separate setting from the timer sound on
+purpose: muting the chime that ends a focus session says nothing about whether
+you want to sleep through the end of a break.
+
+Nothing here can run away with your phone. The looping tone and the repeating
+vibration both belong to the app's own process and stop when it does, so the
+worst failure is silence rather than a device that will not shut up.
 
 ### A clock you can read from across the desk
 

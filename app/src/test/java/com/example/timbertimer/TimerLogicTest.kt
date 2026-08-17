@@ -9,6 +9,7 @@ import com.example.timbertimer.data.model.Limits
 import com.example.timbertimer.data.model.Project
 import com.example.timbertimer.data.model.ProjectBook
 import com.example.timbertimer.data.model.Projects
+import com.example.timbertimer.data.model.RestTimer
 import com.example.timbertimer.data.model.TimerMode
 import com.example.timbertimer.data.model.TreeSpecies
 import com.example.timbertimer.data.remote.FocusSessionRow
@@ -94,6 +95,117 @@ class TimerLogicTest {
         // A stopwatch never becomes "due" — only the user ends it.
         assertFalse(timer.isDue(start + 90_000))
         assertFalse(timer.isDue(start + Limits.STOPWATCH_SECONDS * 1000L + 1))
+    }
+
+    // ---------- the rest ----------
+
+    private fun restCountdown(startedAt: Long, minutes: Int) = RestTimer(
+        startedAt = startedAt,
+        endAt = startedAt + minutes * 60_000L,
+        durationMinutes = minutes,
+    )
+
+    @Test
+    fun `a rest countdown reads its remaining time from the clock`() {
+        val start = 1_000_000_000_000L
+        val rest = restCountdown(start, 15)
+
+        assertEquals(900L, rest.remainingSeconds(start))
+        assertEquals(899L, rest.remainingSeconds(start + 1_000))
+        assertEquals(0L, rest.remainingSeconds(start + 900_000))
+        // Never negative, however long the phone was off.
+        assertEquals(0L, rest.remainingSeconds(start + 86_400_000))
+    }
+
+    @Test
+    fun `a rest countdown that ran out while the phone was off is simply due`() {
+        val start = 1_000_000_000_000L
+        val rest = restCountdown(start, 10)
+
+        assertFalse(rest.isDue(start))
+        assertFalse(rest.isDue(start + 599_000))
+        assertTrue(rest.isDue(start + 600_000))
+        // The reboot case: the alarm is owed, not lost.
+        assertTrue(rest.isDue(start + 86_400_000))
+    }
+
+    @Test
+    fun `the open-ended rest never becomes due`() {
+        val start = 1_000_000_000_000L
+        val rest = RestTimer(startedAt = start)
+
+        assertFalse(rest.isCountdown)
+        assertFalse(rest.isDue(start + 86_400_000))
+        // It counts up, and has no goal to measure progress against.
+        assertEquals(3600L, rest.elapsedSeconds(start + 3_600_000))
+        assertEquals(0L, rest.remainingSeconds(start + 3_600_000))
+        assertEquals(0f, rest.progress(start + 3_600_000), 0.001f)
+    }
+
+    @Test
+    fun `a rest shows the clock its mode calls for`() {
+        val start = 1_000_000_000_000L
+        // A countdown shows what is left...
+        assertEquals(600L, restCountdown(start, 15).displaySeconds(start + 300_000))
+        // ...and a stopwatch shows what has gone.
+        assertEquals(300L, RestTimer(startedAt = start).displaySeconds(start + 300_000))
+    }
+
+    /**
+     * Measured between the two instants rather than from [RestTimer.durationMinutes],
+     * because a rest adopted from another device is only guaranteed to carry its
+     * endpoints — and the bar has to be right for one of those too.
+     */
+    @Test
+    fun `rest progress is measured between the two instants`() {
+        val start = 1_000_000_000_000L
+        val rest = restCountdown(start, 10)
+
+        assertEquals(0f, rest.progress(start), 0.001f)
+        assertEquals(0.5f, rest.progress(start + 300_000), 0.001f)
+        assertEquals(1f, rest.progress(start + 600_000), 0.001f)
+        // Past the end it stays pinned rather than running over.
+        assertEquals(1f, rest.progress(start + 900_000), 0.001f)
+
+        // A row that lost its duration_minutes to an un-migrated database still
+        // draws a correct bar, because the ends are all it reads.
+        val endsOnly = RestTimer(startedAt = start, endAt = start + 600_000, durationMinutes = 0)
+        assertEquals(0.5f, endsOnly.progress(start + 300_000), 0.001f)
+    }
+
+    @Test
+    fun `an extended rest keeps its start and moves only its end`() {
+        val start = 1_000_000_000_000L
+        val rest = restCountdown(start, 10)
+        // What TimerEngine.extendRest builds when the rest has not run out yet.
+        val extended = rest.copy(
+            endAt = rest.endAt!! + 5 * 60_000L,
+            durationMinutes = rest.durationMinutes + 5,
+        )
+
+        assertEquals(start, extended.startedAt)
+        assertEquals(900L, extended.remainingSeconds(start))
+        assertFalse(extended.isDue(start + 600_000))
+        assertTrue(extended.isDue(start + 900_000))
+    }
+
+    /**
+     * The rule `finishRest` applies: a rest that reached its end is credited in
+     * full, so a second of rounding slack cannot turn a 15-minute rest into 14.
+     */
+    @Test
+    fun `a rest that ran out is credited for its whole length`() {
+        val start = 1_000_000_000_000L
+        val rest = restCountdown(start, 15)
+
+        // The tick that notices lands a moment late, as it always does.
+        val elapsed = rest.elapsedSeconds(start + 900_400)
+        assertTrue(elapsed >= rest.durationMinutes * 60L - 1)
+
+        // Ended early, it is worth only what it actually ran.
+        val early = rest.elapsedSeconds(start + 240_000)
+        assertFalse(early >= rest.durationMinutes * 60L - 1)
+        assertEquals(4, Math.round(early / 60.0).toInt())
     }
 
     // ---------- record rules ----------

@@ -141,10 +141,72 @@ data class ActiveTimer(
     }
 }
 
-/** The rest stopwatch. It records nothing until it is stopped. */
-data class RestTimer(val startedAt: Long) {
+/**
+ * A rest that is currently running — either open-ended, or counting down to a
+ * length the user picked.
+ *
+ * [endAt] is what tells the two apart, and it is an instant for the same reason
+ * [ActiveTimer.endAt] is: nothing has to keep ticking for a rest to stay
+ * correct, so one whose moment passed while the phone was off is simply *due*.
+ * A null [endAt] is the original open-ended stopwatch, which has no moment to
+ * arrive and so never alarms.
+ *
+ * It records nothing until it is stopped.
+ */
+data class RestTimer(
+    val startedAt: Long,
+    /** Null for the open-ended stopwatch; the instant a countdown lands on. */
+    val endAt: Long? = null,
+    /** The length that was picked, in minutes. 0 for the stopwatch. */
+    val durationMinutes: Int = 0,
+    /**
+     * True once the row exists in `active_rest_timers`.
+     *
+     * The same distinction [ActiveTimer.cloudSynced] draws, and needed for the
+     * same reason: an empty shared row means "another device finished this" only
+     * for a rest that was published in the first place. Without it, a rest
+     * started with no signal is indistinguishable from one that has been ended
+     * elsewhere, and the next sync throws it away — taking its alarm with it.
+     */
+    val cloudSynced: Boolean = false,
+) {
+    val isCountdown: Boolean get() = endAt != null
+
+    /** How long this rest has actually run — the figure that gets recorded. */
     fun elapsedSeconds(now: Long = System.currentTimeMillis()): Long =
         maxOf(0L, (now - startedAt) / 1000L)
+
+    /** Seconds still to go, or 0 for a stopwatch, which has nowhere to go. */
+    fun remainingSeconds(now: Long = System.currentTimeMillis()): Long =
+        if (endAt == null) 0L else maxOf(0L, ceilDiv(endAt - now, 1000L))
+
+    /** The clock the panel shows: counting down when there is something to count to. */
+    fun displaySeconds(now: Long = System.currentTimeMillis()): Long =
+        if (endAt == null) elapsedSeconds(now) else remainingSeconds(now)
+
+    /** Countdown progress 0..1. A stopwatch has no goal, so it reports 0. */
+    fun progress(now: Long = System.currentTimeMillis()): Float {
+        val total = totalSeconds
+        if (total <= 0L) return 0f
+        return (1f - remainingSeconds(now).toFloat() / total).coerceIn(0f, 1f)
+    }
+
+    fun isDue(now: Long = System.currentTimeMillis()): Boolean =
+        endAt != null && remainingSeconds(now) <= 0L
+
+    /**
+     * The countdown's full length, taken from the two instants rather than from
+     * [durationMinutes]: a rest adopted from another device is only guaranteed
+     * to carry its endpoints, and the ends are what the progress bar measures.
+     */
+    private val totalSeconds: Long
+        get() = if (endAt == null) 0L else maxOf(0L, (endAt - startedAt) / 1000L)
+
+    private companion object {
+        /** Matches JS `Math.ceil(ms / 1000)` for negative values too. */
+        fun ceilDiv(value: Long, by: Long): Long =
+            if (value <= 0L) value / by else (value + by - 1) / by
+    }
 }
 
 /** Where records are being read from and written to right now. */
@@ -167,6 +229,16 @@ object Limits {
     const val TIMER_MINUTES_MAX = 600
 
     const val DEFAULT_DURATION = 30
+
+    /**
+     * The rest shortcuts, and the length one starts on.
+     *
+     * Shared with the web app so a rest set on one client reads the same on the
+     * other. Ten minutes rather than five: it is the one most people actually
+     * want, and the shorter shortcut is right there if they do not.
+     */
+    val REST_PRESETS = listOf(5, 10, 15)
+    const val DEFAULT_REST_DURATION = 10
 
     /**
      * Stored untranslated, exactly as the web app writes them, so a record reads
