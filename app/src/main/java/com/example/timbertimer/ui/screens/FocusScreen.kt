@@ -528,10 +528,13 @@ private fun RestPanel(
             SegmentedRow(
                 options = listOf(TimerMode.COUNTDOWN, TimerMode.STOPWATCH),
                 selected = form.restMode,
+                // The same two words the focus toggle uses. A rest countdown
+                // and a focus countdown are the same idea, so naming them
+                // differently would invent a distinction that is not there.
                 label = {
                     stringResource(
-                        if (it == TimerMode.COUNTDOWN) R.string.rest_mode_timer
-                        else R.string.rest_mode_open
+                        if (it == TimerMode.COUNTDOWN) R.string.mode_countdown
+                        else R.string.mode_stopwatch
                     )
                 },
                 onSelect = onRestModeChange,

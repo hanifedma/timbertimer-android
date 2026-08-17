@@ -44,8 +44,6 @@
     <string name="rest_finish">Finish rest</string>
     <string name="rest_record_title">Rest</string>
     <string name="rest_length">Rest length</string>
-    <string name="rest_mode_timer">Timer</string>
-    <string name="rest_mode_open">Open-ended</string>
     <string name="rest_extend">+5 min</string>
     <string name="rest_ends_at">Ends at %1$s</string>
     <string name="toast_rest_planted">Rest planted a wilted tree.</string>
@@ -62,7 +60,7 @@
     <string name="rest_alarm_silence">Silence</string>
     <string name="settings_rest_alert">Rest alarm</string>
     <string name="settings_rest_alert_desc">How the end of a rest gets your attention. It plays as an alarm, so it is heard through silent mode — and through Do Not Disturb once that is allowed below.</string>
-    <string name="settings_rest_alert_both">Sound + buzz</string>
+    <string name="settings_rest_alert_both">Both</string>
     <string name="settings_rest_alert_sound">Sound</string>
     <string name="settings_rest_alert_vibrate">Buzz</string>
     <string name="settings_rest_alert_silent">Silent</string>
