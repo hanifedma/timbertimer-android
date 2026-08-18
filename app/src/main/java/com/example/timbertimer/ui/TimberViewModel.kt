@@ -370,10 +370,6 @@ class TimberViewModel(
         viewModelScope.launch { engine.finishRest() }
     }
 
-    fun extendRest() {
-        viewModelScope.launch { engine.extendRest() }
-    }
-
     /**
      * Auditions the choice as it is made, the way the volume slider does.
      *

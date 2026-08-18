@@ -14,7 +14,9 @@ import com.example.timbertimer.data.local.RestAlertStyle
 import com.example.timbertimer.data.local.SettingsStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -55,6 +57,16 @@ class TimerFeedback(
      * throttled or dozing process cannot make it skip.
      */
     private var alarmTrack: AudioTrack? = null
+
+    /**
+     * True while the real alarm is going off, so a settings audition cannot
+     * take its track away from it.
+     */
+    @Volatile
+    private var ringing = false
+
+    /** The running audition, cancelled when another starts or the alarm does. */
+    private var previewJob: Job? = null
 
     /**
      * Cues are built and started here rather than on the caller's thread.
@@ -136,16 +148,19 @@ class TimerFeedback(
      */
     fun startRestAlarm() {
         val style = settings.restAlert.value
+        ringing = true
+        previewJob?.cancel()
         if (style.wantsSound) {
             audioScope.launch {
                 val samples = buildRestAlarmCycle()
-                audioLock.withLock { loopAlarm(samples) }
+                audioLock.withLock { playAlarm(samples, loop = true) }
             }
         }
         if (style.wantsVibration) vibrateRestAlarm()
     }
 
     fun stopRestAlarm() {
+        ringing = false
         stopAlarmVibration()
         audioScope.launch {
             audioLock.withLock {
@@ -160,14 +175,36 @@ class TimerFeedback(
      *
      * Plays the real thing at the real level rather than a polite sample: the
      * point of the audition is to find out whether this will actually wake you,
-     * and a quieter preview would answer a different question. It stops itself
-     * after a single cycle, which is what keeps it a preview.
+     * and a quieter preview would answer a different question.
+     *
+     * Stopping it is done by *not asking it to loop* and then releasing the
+     * track a cycle later — not by cancelling a loop already under way. An
+     * [AudioTrack] in `MODE_STATIC` refuses to have its loop points changed
+     * once it is playing, so an earlier version that started the looping alarm
+     * and then tried to call it back left the preview ringing forever with
+     * nothing that would ever stop it.
      */
     fun previewRestAlarm(style: RestAlertStyle = settings.restAlert.value) {
+        // The real thing outranks a demonstration of it. Without this, tapping
+        // a setting while the alarm is going off would replace the ringing
+        // track with a one-shot and silence an alarm that is still owed.
+        if (ringing) return
+
+        previewJob?.cancel()
         if (style.wantsSound) {
-            audioScope.launch {
+            previewJob = audioScope.launch {
                 val samples = buildRestAlarmCycle()
-                audioLock.withLock { playAlarmOnce(samples) }
+                audioLock.withLock { playAlarm(samples, loop = false) }
+                // Released rather than left to finish quietly, so a second tap
+                // a moment later is not queued behind a track still holding the
+                // device's audio.
+                delay(samples.size * 1000L / SAMPLE_RATE + PREVIEW_TAIL_MS)
+                audioLock.withLock {
+                    if (!ringing) {
+                        runCatching { alarmTrack?.pause() }
+                        releaseAlarm()
+                    }
+                }
             }
         }
         if (style.wantsVibration) previewAlarmVibration()
@@ -193,13 +230,13 @@ class TimerFeedback(
                     @Suppress("DEPRECATION")
                     vibrator.vibrate(
                         VibrationEffect.createWaveform(pattern, amplitudes, -1),
-                        alarmAudioAttributes(),
+                        alarmVibrationAttributes(),
                     )
                 }
 
                 else -> {
                     @Suppress("DEPRECATION")
-                    vibrator.vibrate(pattern, -1, alarmAudioAttributes())
+                    vibrator.vibrate(pattern, -1, alarmVibrationAttributes())
                 }
             }
         }
@@ -238,12 +275,12 @@ class TimerFeedback(
                 Build.VERSION.SDK_INT >= Build.VERSION_CODES.O -> {
                     val effect = VibrationEffect.createWaveform(pattern, amplitudes, 0)
                     @Suppress("DEPRECATION")
-                    vibrator.vibrate(effect, alarmAudioAttributes())
+                    vibrator.vibrate(effect, alarmVibrationAttributes())
                 }
 
                 else -> {
                     @Suppress("DEPRECATION")
-                    vibrator.vibrate(pattern, 0, alarmAudioAttributes())
+                    vibrator.vibrate(pattern, 0, alarmVibrationAttributes())
                 }
             }
         }
@@ -253,7 +290,38 @@ class TimerFeedback(
         runCatching { vibrator()?.cancel() }
     }
 
+    /**
+     * The rest alarm's sound, filed as **media**.
+     *
+     * `USAGE_ALARM` would be the obvious choice and is not the one made here.
+     * Usage decides which of the phone's volume sliders governs the sound, and
+     * an alarm-usage tone answers only to the alarm slider — which is the one
+     * nobody adjusts, so the rest alarm arrived at whatever level the last
+     * morning alarm was set to and ignored the volume keys entirely.
+     *
+     * Media is the slider people actually hold. What it costs: the alarm stream
+     * is exempt from Do Not Disturb by default and media is exempt only while
+     * DND's "Media" allowance is on — which it is out of the box, but can be
+     * turned off. Silent mode is unaffected either way; the ringer switch has
+     * never governed media.
+     *
+     * The vibration keeps `USAGE_ALARM`, below, because vibration has no volume
+     * for this to trade against and so nothing to gain by moving.
+     */
     private fun alarmAudioAttributes(): AudioAttributes =
+        AudioAttributes.Builder()
+            .setUsage(AudioAttributes.USAGE_MEDIA)
+            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+            .build()
+
+    /**
+     * The attributes the pre-33 vibration API takes.
+     *
+     * Still an alarm: this is the API's only way to say "this buzz is not a
+     * notification", and it is what keeps the vibration from being dropped
+     * under Do Not Disturb and by the ring-mode policy on many OEM builds.
+     */
+    private fun alarmVibrationAttributes(): AudioAttributes =
         AudioAttributes.Builder()
             .setUsage(AudioAttributes.USAGE_ALARM)
             .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
@@ -389,13 +457,19 @@ class TimerFeedback(
     }
 
     /**
-     * Plays [samples] on repeat until stopped.
+     * Plays [samples], repeating forever when [loop] is set.
      *
      * `MODE_STATIC` puts the whole cycle in the track's own buffer and
      * `setLoopPoints(..., -1)` repeats it in the audio hardware, so once this
      * returns there is nothing left for the app to do or to fail to do.
+     *
+     * **Whether it loops is decided here and cannot be changed afterwards.** A
+     * static track rejects `setLoopPoints` once it is playing, so there is no
+     * such thing as starting the loop and calling it back — the choice has to
+     * be made before [AudioTrack.play], which is why it is a parameter rather
+     * than something the caller adjusts.
      */
-    private fun loopAlarm(samples: ShortArray) {
+    private fun playAlarm(samples: ShortArray, loop: Boolean) {
         if (samples.isEmpty()) return
         releaseAlarm()
 
@@ -416,21 +490,23 @@ class TimerFeedback(
 
         runCatching {
             created.write(samples, 0, samples.size)
-            // -1 is "loop forever"; the frame count is the whole buffer.
-            created.setLoopPoints(0, samples.size, -1)
+            // -1 is "loop forever"; the frame count is the whole buffer. Before
+            // play(), for the reason in the note above.
+            if (loop) created.setLoopPoints(0, samples.size, -1)
             created.play()
             alarmTrack = created
         }.onFailure { created.release() }
     }
 
-    /** The same track without the loop points, for the settings audition. */
-    private fun playAlarmOnce(samples: ShortArray) {
-        loopAlarm(samples)
-        runCatching { alarmTrack?.setLoopPoints(0, 0, 0) }
-    }
-
     private fun releaseAlarm() {
-        alarmTrack?.let { existing -> runCatching { existing.release() } }
+        alarmTrack?.let { existing ->
+            // Stopped first: releasing a track that is still playing is
+            // allowed but leaves the tail to the mixer's discretion, and the
+            // one thing this must never do is keep making noise.
+            runCatching { existing.pause() }
+            runCatching { existing.flush() }
+            runCatching { existing.release() }
+        }
         alarmTrack = null
     }
 
@@ -492,6 +568,9 @@ class TimerFeedback(
 
     private companion object {
         const val SAMPLE_RATE = 44100
+
+        /** Slack after the audition's last sample, so nothing is clipped. */
+        const val PREVIEW_TAIL_MS = 150L
         const val TWO_PI = 2.0 * PI
         const val MIN_SAMPLE = -32768.0
         const val MAX_SAMPLE = 32767.0

@@ -173,7 +173,7 @@ to get through the five things that normally swallow one:
 
 | | |
 |---|---|
-| **Silent mode** | The tone and the buzz are both played as *alarms*, which is the class Android exempts from the ringer being off. |
+| **Silent mode** | The buzz is played as an *alarm*, the class Android exempts from the ringer being off; the tone plays as **media**, which the ringer switch has never governed either. Media is deliberate — it is the volume slider people actually hold, where the alarm slider is the one nobody adjusts. |
 | **Do Not Disturb** | The alarm is filed under `CATEGORY_ALARM`, which DND's own "allow alarms" rule lets through by default. **Settings → Allow alerts in Do Not Disturb** adds the channel-level bypass on top. |
 | **Battery saver / Doze** | An exact alarm is scheduled for the instant the rest ends, and a wake lock is held while it rings. |
 | **The app being killed** | That alarm fires whether or not the app is still running, and re-starts it. |
@@ -189,6 +189,12 @@ the two minutes is the notification, which **cannot be swiped away**: only
 the choice as you make it. It is a separate setting from the timer sound on
 purpose: muting the chime that ends a focus session says nothing about whether
 you want to sleep through the end of a break.
+
+**It is silent out of the box.** An alarm that makes a noise nobody asked for is
+the kind of thing an app gets uninstalled over, so the loud versions are opted
+into rather than out of. The notification is still the stubborn one — full-screen
+on a locked phone, and undismissable until answered — so a rest still ends
+visibly on a fresh install; it just does not shout.
 
 Nothing here can run away with your phone. The looping tone and the repeating
 vibration both belong to the app's own process and stop when it does, so the

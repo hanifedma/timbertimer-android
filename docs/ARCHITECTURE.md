@@ -202,7 +202,7 @@ Five things can defeat an alarm, and each needs its own answer:
 |---|---|
 | the process being killed | a second exact alarm, on its own request code |
 | Doze / battery saver | `setExactAndAllowWhileIdle`, and a wake lock while ringing |
-| silent mode | `USAGE_ALARM` on the sound **and** on the vibration |
+| silent mode | media usage on the sound, `USAGE_ALARM` on the vibration |
 | Do Not Disturb | `CATEGORY_ALARM`, plus the channel's DND bypass where granted |
 | a locked, dark screen | a full-screen intent into `RestAlarmActivity` |
 
@@ -210,6 +210,27 @@ The vibration attributes are the easiest of these to get wrong, because leaving
 them off looks like it works: a bare `vibrate(effect)` is filed as a
 notification and is silently dropped under DND and by the ring-mode policy on
 many OEM builds — exactly when a rest alarm most needs to land.
+
+The **sound** deliberately does *not* use `USAGE_ALARM`, which is the one place
+this diverges from the obvious answer. Usage decides which volume slider governs
+a sound, and alarm-usage answers only to the alarm slider — the one nobody
+touches, so the rest alarm arrived at whatever level the last morning alarm was
+set to and ignored the volume keys. `USAGE_MEDIA` is the slider people actually
+hold. The trade is DND: alarm is exempt unconditionally, media is exempt only
+while DND's "Media" allowance is on, which it is by default. Silent mode is
+unaffected either way — the ringer switch has never governed media.
+
+`alarmAudioAttributes()` and `alarmVibrationAttributes()` exist as two functions
+for exactly this reason, and merging them would silently re-file the vibration
+as media.
+
+**The default is `SILENT`.** An alarm that makes a noise nobody asked for is how
+an app gets uninstalled, so the loud styles are opted into. What still happens on
+a default install is the notification — full-screen on a locked phone, and
+undismissable until answered — which is the part that actually carries the
+message. `RestAlarm.fire` therefore takes its wake lock only when something will
+be loud: on the silent setting there is nothing for the ring timer to stop, so
+holding the CPU awake for two minutes would be a countdown to a no-op.
 
 Both the looping `AudioTrack` and the repeating waveform are **owned by this
 process and stop when it does**, so the failure mode is silence rather than a

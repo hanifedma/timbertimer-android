@@ -24,7 +24,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -37,7 +36,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.lifecycleScope
 import com.example.timbertimer.MainActivity
 import com.example.timbertimer.R
 import com.example.timbertimer.TimberApplication
@@ -49,7 +47,6 @@ import com.example.timbertimer.data.model.Projects
 import com.example.timbertimer.ui.components.TreeArt
 import com.example.timbertimer.ui.components.rememberTreePalette
 import com.example.timbertimer.ui.theme.TimberTimerTheme
-import kotlinx.coroutines.launch
 
 /**
  * The screen a finished rest puts in front of you.
@@ -101,10 +98,7 @@ class RestAlarmActivity : ComponentActivity() {
                 RestAlarmScreen(
                     restProject = book[Projects.REST_ID],
                     durationMinutes = ringing?.durationMinutes ?: 0,
-                    loud = ringing?.loud ?: false,
                     onDismiss = ::dismiss,
-                    onSilence = { container.restAlarm.silence() },
-                    onExtend = ::extend,
                     onFocus = ::openFocus,
                 )
             }
@@ -154,19 +148,6 @@ class RestAlarmActivity : ComponentActivity() {
         finish()
     }
 
-    /**
-     * Another five minutes — a fresh rest, not a revival of the one that ended.
-     * See [TimerEngine.restAgainFromAlarm] for why it cannot be an extension.
-     *
-     * Silenced here rather than left to the coroutine, so the noise stops on
-     * the press instead of whenever the work is scheduled.
-     */
-    private fun extend() {
-        container.restAlarm.dismiss()
-        lifecycleScope.launch { container.timerEngine.restAgainFromAlarm() }
-        finish()
-    }
-
     private fun openFocus() {
         container.restAlarm.dismiss()
         startActivity(
@@ -185,10 +166,7 @@ class RestAlarmActivity : ComponentActivity() {
 private fun RestAlarmScreen(
     restProject: Project,
     durationMinutes: Int,
-    loud: Boolean,
     onDismiss: () -> Unit,
-    onSilence: () -> Unit,
-    onExtend: () -> Unit,
     onFocus: () -> Unit,
 ) {
     // Landscape on a phone leaves barely enough height for the buttons, so the
@@ -254,26 +232,8 @@ private fun RestAlarmScreen(
 
             Spacer(Modifier.height(10.dp))
 
-            OutlinedButton(onClick = onExtend, modifier = actions) {
-                Text(stringResource(R.string.rest_alarm_extend))
-            }
-
-            Spacer(Modifier.height(10.dp))
-
             TextButton(onClick = onFocus, modifier = actions) {
                 Text(stringResource(R.string.rest_alarm_focus))
-            }
-
-            // Offered only while there is something to silence. Once the ring
-            // has run its course this would be a button that does nothing.
-            if (loud) {
-                Spacer(Modifier.height(4.dp))
-                TextButton(onClick = onSilence, modifier = actions) {
-                    Text(
-                        text = stringResource(R.string.rest_alarm_silence),
-                        style = MaterialTheme.typography.labelLarge,
-                    )
-                }
             }
         }
     }

@@ -482,56 +482,6 @@ class TimerEngine(
     }
 
     /**
-     * Adds [EXTEND_MINUTES] to a rest, from the alarm or from the panel.
-     *
-     * Deliberately measured from *now* rather than from the end that just
-     * passed. The user is asking for another five minutes of rest starting when
-     * they asked, and an extension that quietly expired thirty seconds later
-     * because the alarm rang for four and a half would be worse than no button
-     * at all.
-     */
-    suspend fun extendRest() {
-        val rest = _rest.value ?: return
-        if (!rest.isCountdown) return
-
-        val now = System.currentTimeMillis()
-        val base = maxOf(rest.endAt ?: now, now)
-        val extended = rest.copy(
-            endAt = base + EXTEND_MINUTES * 60_000L,
-            durationMinutes = (rest.durationMinutes + EXTEND_MINUTES)
-                .coerceAtMost(Limits.TIMER_MINUTES_MAX),
-        )
-
-        // Order matters: the alarm has to come down before the rest is re-armed,
-        // or restoreOngoingNotification would find an alarm still ringing for a
-        // rest that is now running again.
-        restAlarm.dismiss()
-        restCompleting = false
-        applyRest(extended)
-        ensureTicking()
-        if (repository.pushCloudRest(extended)) markRestSynced()
-        _messages.tryEmit(UiMessage.of(R.string.toast_rest_extended))
-    }
-
-    /**
-     * "Five more minutes", from the alarm.
-     *
-     * A *new* rest rather than an extension of the old one, and it has to be:
-     * by the time an alarm exists its rest has been recorded, its tree planted
-     * and its shared row cleared, so there is nothing left to extend —
-     * [extendRest] would find no rest and quietly do nothing. Un-planting the
-     * tree to bolt five minutes onto the end would rewrite a record the user
-     * can already see in their forest, and two short rests back to back is the
-     * honest description of what actually happened anyway.
-     */
-    suspend fun restAgainFromAlarm() {
-        restAlarm.dismiss()
-        if (_rest.value != null) return
-        startRest(TimerMode.COUNTDOWN, EXTEND_MINUTES)
-        _messages.tryEmit(UiMessage.of(R.string.toast_rest_again))
-    }
-
-    /**
      * Ending a rest plants the wilted tree it grew, and its minutes count toward
      * the totals. Rests under a minute are dropped, so a stray tap leaves no litter.
      */
@@ -871,9 +821,6 @@ class TimerEngine(
 
     private companion object {
         const val TICK_MS = 1000L
-
-        /** What the alarm's and the panel's "+5 min" adds. */
-        const val EXTEND_MINUTES = 5
 
         /**
          * How far apart two rests' starts may be and still be the same rest.

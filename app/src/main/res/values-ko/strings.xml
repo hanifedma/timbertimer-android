@@ -43,20 +43,15 @@
     <string name="rest_finish">휴식 완료</string>
     <string name="rest_record_title">휴식</string>
     <string name="rest_length">휴식 길이</string>
-    <string name="rest_extend">+5분</string>
     <string name="rest_ends_at">%1$s에 종료</string>
     <string name="toast_rest_planted">휴식이 시든 나무를 심었어요.</string>
     <string name="toast_rest_discarded">휴식이 너무 짧아 심지 않았어요.</string>
-    <string name="toast_rest_extended">5분 더 쉬어요.</string>
 
     <!-- The alarm that ends a rest -->
     <string name="rest_alarm_title">휴식이 끝났어요</string>
     <string name="rest_alarm_body">%1$s 휴식이 끝났습니다.</string>
     <string name="rest_alarm_dismiss">확인</string>
-    <string name="rest_alarm_extend">5분 더 쉬기</string>
-    <string name="toast_rest_again">5분 더 쉽니다.</string>
     <string name="rest_alarm_focus">집중 시작하기</string>
-    <string name="rest_alarm_silence">소리 끄기</string>
     <string name="settings_rest_alert">휴식 알람</string>
     <string name="settings_rest_alert_desc">휴식이 끝났을 때 알리는 방식이에요. 알람으로 재생되므로 무음 모드에서도 들리고, 아래에서 허용하면 방해 금지 모드도 통과합니다.</string>
     <string name="settings_rest_alert_both">둘 다</string>
@@ -252,7 +247,6 @@
     <string name="notif_rest_alarm_text">%1$s 휴식이 끝났습니다. 다시 시작해 볼까요.</string>
     <string name="notif_rest_alarm_text_quiet">%1$s 휴식이 조금 전에 끝났어요.</string>
     <string name="notif_action_rest_dismiss">확인</string>
-    <string name="notif_action_rest_extend">+5분</string>
     <string name="notif_done_title">세션을 심었어요 🌲</string>
     <string name="notif_done_text">%1$s — %2$s 집중했어요. %3$s(이)가 숲에 합류했어요.</string>
     <string name="settings_background_sync">백그라운드에서 계속 동기화</string>

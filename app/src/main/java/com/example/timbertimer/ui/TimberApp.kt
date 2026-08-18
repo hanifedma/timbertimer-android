@@ -290,7 +290,6 @@ fun TimberApp(
                                 onRestDurationChange = viewModel::setRestDuration,
                                 onStartRest = viewModel::startRest,
                                 onFinishRest = viewModel::finishRest,
-                                onExtendRest = viewModel::extendRest,
                             )
                         }
 

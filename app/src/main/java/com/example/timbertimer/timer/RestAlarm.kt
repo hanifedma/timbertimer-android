@@ -28,7 +28,7 @@ import kotlinx.coroutines.launch
  * |---|---|
  * | the process being killed | an exact alarm re-starts it ([TimerAlarms]) |
  * | Doze / battery saver | `setExactAndAllowWhileIdle`, and a wake lock once ringing |
- * | silent mode / ringer off | `USAGE_ALARM` on both the sound and the vibration |
+ * | silent mode / ringer off | media usage for the sound, `USAGE_ALARM` for the vibration |
  * | Do Not Disturb | `CATEGORY_ALARM`, plus channel DND bypass where granted |
  * | a locked, dark screen | a full-screen intent that turns the screen on |
  *
@@ -72,9 +72,11 @@ class RestAlarm(
     /**
      * What is being announced.
      *
-     * [loud] goes false at the cap while the alarm itself stays up, which is
-     * what lets the sheet stop offering to silence something that is already
-     * silent.
+     * [loud] goes false at the cap while the alarm itself stays up, and is what
+     * moves the notification from "time to get back to it" to "finished a while
+     * ago". It says nothing about whether a sound was ever made — on the silent
+     * setting it flips just the same, because the wording is about how long the
+     * alarm has gone unanswered rather than about the noise.
      */
     data class Ringing(
         val durationMinutes: Int,
@@ -96,10 +98,16 @@ class RestAlarm(
 
         _ringing.value = Ringing(durationMinutes = durationMinutes, firedAt = System.currentTimeMillis())
 
+        // Only when something will actually be making a noise or a buzz. On
+        // the default silent setting there is nothing for the ring timer to
+        // stop, so holding the CPU awake for two minutes would be battery
+        // spent on a countdown to a no-op.
+        val loudly = settings.restAlert.value.let { it.wantsSound || it.wantsVibration }
+
         // Before the noise, not after: the screen coming on is the fastest of
         // these to be noticed, and on a locked phone it is the only one that
         // does not depend on a channel setting going our way.
-        acquireWakeLock()
+        if (loudly) acquireWakeLock()
         notifications.showRestAlarm(durationMinutes, loud = true)
         feedback.startRestAlarm()
 
@@ -129,18 +137,6 @@ class RestAlarm(
         feedback.stopRestAlarm()
         notifications.cancelRestAlarm()
         releaseWakeLock()
-    }
-
-    /** Silences the noise but leaves the alarm standing, for the sheet's button. */
-    fun silence() {
-        val current = _ringing.value ?: return
-        if (!current.loud) return
-        ringJob?.cancel()
-        ringJob = null
-        feedback.stopRestAlarm()
-        releaseWakeLock()
-        _ringing.value = current.copy(loud = false)
-        notifications.showRestAlarm(current.durationMinutes, loud = false)
     }
 
     /**

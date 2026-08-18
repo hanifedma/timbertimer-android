@@ -44,20 +44,15 @@
     <string name="rest_finish">Finish rest</string>
     <string name="rest_record_title">Rest</string>
     <string name="rest_length">Rest length</string>
-    <string name="rest_extend">+5 min</string>
     <string name="rest_ends_at">Ends at %1$s</string>
     <string name="toast_rest_planted">Rest planted a wilted tree.</string>
     <string name="toast_rest_discarded">Rest was too short to plant.</string>
-    <string name="toast_rest_extended">Five more minutes.</string>
 
     <!-- The alarm that ends a rest -->
     <string name="rest_alarm_title">Rest is over</string>
     <string name="rest_alarm_body">Your %1$s rest has finished.</string>
     <string name="rest_alarm_dismiss">Dismiss</string>
-    <string name="rest_alarm_extend">Rest 5 more minutes</string>
-    <string name="toast_rest_again">Resting five more minutes.</string>
     <string name="rest_alarm_focus">Start focusing</string>
-    <string name="rest_alarm_silence">Silence</string>
     <string name="settings_rest_alert">Rest alarm</string>
     <string name="settings_rest_alert_desc">How the end of a rest gets your attention. It plays as an alarm, so it is heard through silent mode — and through Do Not Disturb once that is allowed below.</string>
     <string name="settings_rest_alert_both">Both</string>
@@ -255,7 +250,6 @@
     <string name="notif_rest_alarm_text">Your %1$s rest has finished. Time to get back to it.</string>
     <string name="notif_rest_alarm_text_quiet">Your %1$s rest finished a while ago.</string>
     <string name="notif_action_rest_dismiss">Dismiss</string>
-    <string name="notif_action_rest_extend">+5 min</string>
     <string name="notif_done_title">Session planted 🌲</string>
     <string name="notif_done_text">%1$s — %2$s focused. A %3$s joined your forest.</string>
     <string name="settings_background_sync">Keep syncing in the background</string>

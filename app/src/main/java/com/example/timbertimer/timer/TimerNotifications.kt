@@ -620,11 +620,6 @@ class TimerNotifications(context: Context) {
                 context.getString(R.string.notif_action_rest_dismiss),
                 serviceAction(TimerService.ACTION_DISMISS_REST_ALARM),
             )
-            .addAction(
-                0,
-                context.getString(R.string.notif_action_rest_extend),
-                serviceAction(TimerService.ACTION_EXTEND_REST),
-            )
 
         // Only while it is actually ringing. Asking for a full-screen takeover
         // after the noise has stopped would drag the user out of whatever they

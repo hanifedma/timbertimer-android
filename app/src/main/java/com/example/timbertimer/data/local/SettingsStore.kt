@@ -23,12 +23,19 @@ enum class ThemeMode { SYSTEM, LIGHT, DARK }
  * whether they want to be woken from a break.
  */
 enum class RestAlertStyle(val wire: String) {
-    /** Both, which is what actually gets through a pocket. */
     BOTH("both"),
     SOUND("sound"),
     VIBRATE("vibrate"),
 
-    /** The notification alone: still stubborn, just not loud. */
+    /**
+     * The notification alone, and the default.
+     *
+     * A rest alarm that makes a noise nobody asked for is the kind of thing an
+     * app gets uninstalled over, so the loud versions are opted into rather
+     * than out of. The notification is still the stubborn one — full-screen on
+     * a locked phone, and undismissable until it is answered — so a rest still
+     * ends visibly on a default install; it just does not shout.
+     */
     SILENT("silent");
 
     val wantsSound: Boolean get() = this == BOTH || this == SOUND
@@ -36,7 +43,7 @@ enum class RestAlertStyle(val wire: String) {
 
     companion object {
         fun from(value: String?): RestAlertStyle =
-            entries.firstOrNull { it.wire == value } ?: BOTH
+            entries.firstOrNull { it.wire == value } ?: SILENT
     }
 }
 

@@ -103,13 +103,6 @@ class TimerService : Service() {
             // noise, and the noise should stop on the press rather than
             // whenever a coroutine next gets the main thread.
             ACTION_DISMISS_REST_ALARM -> container.restAlarm.dismiss()
-            // Silenced synchronously, then the new rest is started: the button
-            // was pressed to stop a noise, and waiting on a coroutine to do
-            // that is waiting while it keeps going.
-            ACTION_EXTEND_REST -> {
-                container.restAlarm.dismiss()
-                runInApp { container.timerEngine.restAgainFromAlarm() }
-            }
         }
 
         // A timer the user started should come back if the process is recycled.
@@ -231,7 +224,6 @@ class TimerService : Service() {
         const val ACTION_FINISH = "com.example.timbertimer.FINISH"
         const val ACTION_FINISH_REST = "com.example.timbertimer.FINISH_REST"
         const val ACTION_DISMISS_REST_ALARM = "com.example.timbertimer.DISMISS_REST_ALARM"
-        const val ACTION_EXTEND_REST = "com.example.timbertimer.EXTEND_REST"
 
         /** Fast enough that the progress bar tracks, slow enough to be free. */
         private const val REPOST_INTERVAL_MS = 5_000L

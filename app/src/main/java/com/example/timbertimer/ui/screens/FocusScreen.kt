@@ -99,7 +99,6 @@ fun FocusScreen(
     onRestDurationChange: (Int) -> Unit,
     onStartRest: () -> Unit,
     onFinishRest: () -> Unit,
-    onExtendRest: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     if (wide) {
@@ -122,7 +121,7 @@ fun FocusScreen(
                 RestPanel(
                     form, book, rest, now,
                     onRestModeChange, onRestDurationChange,
-                    onStartRest, onFinishRest, onExtendRest,
+                    onStartRest, onFinishRest,
                 )
             }
         }
@@ -140,7 +139,7 @@ fun FocusScreen(
             RestPanel(
                 form, book, rest, now,
                 onRestModeChange, onRestDurationChange,
-                onStartRest, onFinishRest, onExtendRest,
+                onStartRest, onFinishRest,
             )
         }
     }
@@ -468,7 +467,6 @@ private fun RestPanel(
     onRestDurationChange: (Int) -> Unit,
     onStartRest: () -> Unit,
     onFinishRest: () -> Unit,
-    onExtendRest: () -> Unit,
 ) {
     val resting = rest != null
     val countdown = rest?.isCountdown ?: (form.restMode == TimerMode.COUNTDOWN)
@@ -592,15 +590,6 @@ private fun RestPanel(
                 modifier = Modifier.weight(1f),
             ) {
                 Text(stringResource(R.string.rest_finish), maxLines = 1)
-            }
-        }
-
-        // Only for a running countdown: there is nothing to extend on a
-        // stopwatch, which already runs until it is stopped.
-        if (rest?.isCountdown == true) {
-            Spacer(Modifier.height(8.dp))
-            OutlinedButton(onClick = onExtendRest, modifier = Modifier.fillMaxWidth()) {
-                Text(stringResource(R.string.rest_extend), maxLines = 1)
             }
         }
     }
