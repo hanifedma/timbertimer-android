@@ -21,10 +21,17 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.annotation.StringRes
 import androidx.browser.customtabs.CustomTabsIntent
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
@@ -117,6 +124,30 @@ class MainActivity : ComponentActivity() {
                     onAllowDoNotDisturb = ::requestDoNotDisturbAccess,
                     onAllowFullScreen = ::requestFullScreenAlerts,
                 )
+
+                // Inside the theme so it is the app's dialog rather than the
+                // platform's, and outside TimberApp because sign-in can be
+                // reached from more than one screen.
+                browserPrompt?.let { prompt ->
+                    AlertDialog(
+                        onDismissRequest = { browserPrompt = null },
+                        title = { Text(stringResource(prompt.title)) },
+                        text = { Text(stringResource(prompt.body)) },
+                        confirmButton = {
+                            TextButton(onClick = {
+                                browserPrompt = null
+                                signInWithBrowser()
+                            }) {
+                                Text(stringResource(R.string.auth_sheet_dialog_continue))
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { browserPrompt = null }) {
+                                Text(stringResource(R.string.btn_cancel))
+                            }
+                        },
+                    )
+                }
             }
         }
     }
@@ -324,14 +355,36 @@ class MainActivity : ComponentActivity() {
                 // Dismissing the sheet is an answer, not a failure.
                 GoogleSignIn.Result.Cancelled -> Unit
 
-                // Nothing to choose from, and the branded flow added nothing.
-                GoogleSignIn.Result.NoAccount -> viewModel.notify(R.string.auth_no_google_account)
+                // "No credential" is not only ever "no account signed in". An
+                // app Google has not been told about is refused the same way,
+                // and the two are indistinguishable from here — so the message
+                // stops short of blaming the phone, and the browser is offered
+                // because it signs in either way, with an account already on
+                // the device or a brand new one.
+                GoogleSignIn.Result.NoAccount -> browserPrompt = SignInPrompt.NO_ACCOUNT
 
-                is GoogleSignIn.Result.Unavailable ->
-                    viewModel.notify(R.string.auth_sheet_unavailable)
+                // Not a toast, and not a silent hop into the browser either.
+                // A toast here was a dead end dressed as an explanation: it
+                // named a button somewhere below and then vanished. Asking
+                // instead keeps the decision the user's — the thing that was
+                // wrong about jumping to the browser on its own — while still
+                // putting the way through under their thumb.
+                is GoogleSignIn.Result.Unavailable -> browserPrompt =
+                    if (result.persistent) SignInPrompt.NOT_REGISTERED
+                    else SignInPrompt.TRANSIENT
             }
         }
     }
+
+    /**
+     * Which refusal is currently being explained, or null when no dialog is up.
+     *
+     * Naming the cause rather than raising a bare flag is what lets the dialog
+     * say the *useful* sentence: telling someone to check their connection when
+     * the real answer is an unregistered fingerprint costs them an afternoon,
+     * and so does telling them to add a Google account they already have.
+     */
+    private var browserPrompt by mutableStateOf<SignInPrompt?>(null)
 
     /**
      * The browser route, asked for directly.
@@ -380,6 +433,33 @@ class MainActivity : ComponentActivity() {
  * Transparent bars, with icon contrast chosen for the appearance the app is
  * actually drawing — `dark` means a dark background, so light icons.
  */
+/**
+ * The three ways the account sheet can fail to sign someone in, each paired
+ * with what is actually worth telling them.
+ *
+ * All three end the same way — the browser tab, which needs none of what the
+ * sheet needs — so the difference is only ever in the sentence above the button.
+ */
+private enum class SignInPrompt(@StringRes val title: Int, @StringRes val body: Int) {
+    /** Google does not recognise this package + certificate. See SETUP-GOOGLE-SIGNIN.md. */
+    NOT_REGISTERED(
+        R.string.auth_sheet_dialog_title_setup,
+        R.string.auth_sheet_dialog_body_setup,
+    ),
+
+    /** Nothing to offer — either no account on the device, or, again, no registration. */
+    NO_ACCOUNT(
+        R.string.auth_sheet_dialog_title_no_account,
+        R.string.auth_sheet_dialog_body_no_account,
+    ),
+
+    /** Something momentary, most often no connection. Worth simply retrying. */
+    TRANSIENT(
+        R.string.auth_sheet_dialog_title,
+        R.string.auth_sheet_dialog_body,
+    ),
+}
+
 private fun systemBarStyle(darkTheme: Boolean): SystemBarStyle =
     if (darkTheme) SystemBarStyle.dark(Color.TRANSPARENT)
     else SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)

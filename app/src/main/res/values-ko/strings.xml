@@ -215,7 +215,13 @@
     <string name="auth_verify_failed">로그인을 확인하지 못했어요. 다시 시도해 주세요.</string>
     <string name="auth_no_browser">로그인에 사용할 브라우저가 없어요.</string>
     <string name="auth_no_google_account">이 휴대폰에 Google 계정이 없어요. Android 설정에서 추가한 뒤 다시 시도해 주세요.</string>
-    <string name="auth_sheet_unavailable">Google 로그인 시트를 완료하지 못했어요. 아래 “로그인이 안 되나요?”를 사용해 보세요.</string>
+    <string name="auth_sheet_dialog_title_no_account">사용할 수 있는 Google 계정이 없어요</string>
+    <string name="auth_sheet_dialog_body_no_account">이 휴대폰에 Google 계정이 없거나, 이 빌드가 아직 Google에 등록되지 않았어요. 어느 쪽이든 보안 브라우저 탭으로 로그인하면 돼요 — 휴대폰에 있는 계정을 쓰거나 새로 추가할 수 있어요.</string>
+    <string name="auth_sheet_dialog_title_setup">이 빌드는 아직 Google에 등록되지 않았어요</string>
+    <string name="auth_sheet_dialog_body_setup">Google은 알고 있는 앱에만 로그인을 허용하는데, 이 앱은 아직 Google Cloud 프로젝트에 추가되지 않았어요 — SETUP-GOOGLE-SIGNIN.md를 참고하세요. 그때까지는 보안 브라우저 탭으로 로그인하면 같은 계정으로 들어갈 수 있어요.</string>
+    <string name="auth_sheet_dialog_title">Google 계정 시트를 열지 못했어요</string>
+    <string name="auth_sheet_dialog_body">이 기기에서 Google 계정 선택 화면이 표시되지 않았어요. 보안 브라우저 탭으로 계속 로그인할 수 있어요 — 같은 계정, 같은 결과예요.</string>
+    <string name="auth_sheet_dialog_continue">브라우저로 계속하기</string>
     <string name="auth_native_rejected">Google 로그인은 됐지만 서버가 받아주지 않았어요. 아래 “로그인이 안 되나요?”를 사용해 보세요.</string>
 
     <!-- Confirmations -->

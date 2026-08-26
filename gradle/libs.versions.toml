@@ -14,8 +14,8 @@ browser = "1.10.0"
 serializationJson = "1.9.0"
 coroutines = "1.10.2"
 desugarJdk = "2.1.5"
-credentials = "1.5.0"
-googleid = "1.1.1"
+credentials = "1.6.0"
+googleid = "1.2.0"
 fragment = "1.8.9"
 
 [libraries]

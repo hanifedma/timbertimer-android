@@ -160,6 +160,26 @@ class RealtimeClient(
             }
         }
 
+        /**
+         * The server asking to hang up — a restart on Supabase's side, or the
+         * JWT the socket was opened with finally ageing out.
+         *
+         * Answering matters more than it looks. OkHttp does not complete a
+         * close the remote peer started; until this side calls close() too, the
+         * socket sits half-shut and [onClosed] never runs. That left the one
+         * state nothing recovers from: `connected` still true, so the caller
+         * had stopped polling, and no failure ever arrived to trigger a
+         * reconnect — live sync simply stopped, with the app still saying it
+         * was live.
+         */
+        override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+            _connected.value = false
+            webSocket.close(NORMAL_CLOSURE, null)
+            // A close the server chose is not a close this app asked for, so it
+            // reconnects — disconnect() is what stops that, by clearing `active`.
+            scheduleReconnect()
+        }
+
         override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
             _connected.value = false
             scheduleReconnect()

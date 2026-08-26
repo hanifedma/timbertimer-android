@@ -156,7 +156,20 @@ class SupabaseAuth(
             client.newCall(request).execute().use { response ->
                 val payload = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
-                    throw SupabaseException(readError(payload, response.code), rejected = true)
+                    throw SupabaseException(
+                        readError(payload, response.code),
+                        // "Rejected" has to mean the grant is *gone*, because
+                        // that is the one thing that discards the stored session
+                        // (see validAccessToken). A 5xx is Supabase having a bad
+                        // minute and a 429 is it asking to be asked later —
+                        // neither says anything about the refresh token, and
+                        // treating them as a refusal would sign the user out of
+                        // an account that was never actually revoked, stranding
+                        // their records behind a sign-in screen until they
+                        // noticed. 408 is the same story from the other end.
+                        rejected = response.code in 400..499 &&
+                            response.code != 408 && response.code != 429,
+                    )
                 }
                 json.decodeFromString(TokenResponse.serializer(), payload)
             }

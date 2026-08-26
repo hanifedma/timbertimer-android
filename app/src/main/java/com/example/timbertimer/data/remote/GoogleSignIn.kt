@@ -11,7 +11,6 @@ import androidx.credentials.exceptions.GetCredentialCancellationException
 import androidx.credentials.exceptions.GetCredentialException
 import androidx.credentials.exceptions.GetCredentialProviderConfigurationException
 import androidx.credentials.exceptions.NoCredentialException
-import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import java.security.MessageDigest
@@ -28,13 +27,15 @@ import java.security.SecureRandom
  * removes the redirect entirely, so the sheet is the platform's own, it carries
  * this app's name and icon, and it never mentions Supabase.
  *
- * Two credential options are tried in turn, because they fail in opposite
- * directions. [GetGoogleIdOption] shows the accounts already on the device,
- * which is one tap and the common case, but it has nothing to offer a phone
- * with no Google account signed in. [GetSignInWithGoogleOption] shows the full
- * branded flow, which can add one. Trying the first and falling through to the
- * second on [NoCredentialException] covers both without ever asking the user to
- * understand the difference.
+ * The sheet is [GetSignInWithGoogleOption], the full branded flow, and only
+ * that one — see [requestIdToken] for why the compact one-tap option was
+ * dropped rather than kept as a first choice.
+ *
+ * None of this works until the build is registered: Google issues an ID token
+ * only to an app whose package name *and* signing certificate fingerprint are
+ * on an Android OAuth client in the same project as [webClientId]. That
+ * registration cannot be done from code, which is why every failure here ends
+ * somewhere the user can still get in.
  */
 class GoogleSignIn(
     context: Context,
@@ -58,28 +59,27 @@ class GoogleSignIn(
         val rawNonce = randomNonce()
         val hashedNonce = sha256Hex(rawNonce)
 
-        val onDevice = GetGoogleIdOption.Builder()
-            .setServerClientId(webClientId)
-            // false = offer every Google account on the device, not only the
-            // ones that have signed into this app before. The website shares
-            // this OAuth client, so filtering would usually leave a list of one
-            // with no visible way past it.
-            .setFilterByAuthorizedAccounts(false)
-            // Skip the silent one-tap so the chooser always appears and
-            // switching accounts stays possible.
-            .setAutoSelectEnabled(false)
-            .setNonce(hashedNonce)
-            .build()
-
+        // One option, the branded "Sign in with Google" flow.
+        //
+        // This used to lead with GetGoogleIdOption — the compact one-tap sheet —
+        // and keep the branded flow as a fallback for a device with no Google
+        // account. That fallback was unreachable, and the reason is worth
+        // recording: GetGoogleIdOption's refusals do not arrive as failures.
+        // "[16] Account reauth failed." is delivered as a *cancellation*, which
+        // the chain read as the user changing their mind, so it stopped there
+        // and the flow that would have worked was never tried.
+        //
+        // Leading with the branded flow removes the trap rather than patching
+        // it. It is also the strictly more capable of the two: it re-authorises
+        // an account that needs it instead of giving up, and it can add one that
+        // is not on the device yet — which is what the fallback existed for. The
+        // one thing lost is a slightly shorter sheet for a returning user, and
+        // that is a fair trade for a door that opens.
         val branded = GetSignInWithGoogleOption.Builder(webClientId)
             .setNonce(hashedNonce)
             .build()
 
-        return when (val first = attempt(context, onDevice, rawNonce)) {
-            // No account on the device yet: the branded flow can add one.
-            is Result.NoAccount -> attempt(context, branded, rawNonce)
-            else -> first
-        }
+        return attempt(context, branded, rawNonce)
     }
 
     /**
@@ -129,7 +129,7 @@ class GoogleSignIn(
         // takes the browser route, which does not depend on any of this.
         if (cancelled.isProviderFailure()) {
             Log.w(TAG, "Play Services refused the credential request", cancelled)
-            Result.Unavailable(cancelled.message)
+            Result.Unavailable(cancelled.message, persistent = true)
         } else {
             Log.i(TAG, "Credential sheet dismissed by the user")
             Result.Cancelled
@@ -141,7 +141,7 @@ class GoogleSignIn(
         // No Play Services, or a build of Android with no credential provider
         // at all. Nothing on this device can show the sheet.
         Log.w(TAG, "No credential provider on this device", missing)
-        Result.Unavailable(missing.message)
+        Result.Unavailable(missing.message, persistent = true)
     } catch (error: GetCredentialException) {
         // Most often this build's signing certificate is not registered against
         // an Android OAuth client for this package. Not latched: it is also what
@@ -191,7 +191,16 @@ class GoogleSignIn(
         /** No Google account on the device, and the branded flow added none. */
         data object NoAccount : Result
 
-        /** This device or this build cannot use the sheet; try the browser. */
-        data class Unavailable(val reason: String?) : Result
+        /**
+         * This device or this build cannot use the sheet; try the browser.
+         *
+         * [persistent] separates a refusal that is a fact about this
+         * installation — an unregistered signing certificate, no credential
+         * provider on the device — from one that is only a fact about this
+         * moment, like a request that timed out. Only the first kind is worth
+         * remembering; latching the second would take the sheet away from a
+         * device that was merely offline for a second.
+         */
+        data class Unavailable(val reason: String?, val persistent: Boolean = false) : Result
     }
 }

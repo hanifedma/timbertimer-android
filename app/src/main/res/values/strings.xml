@@ -218,7 +218,13 @@
     <string name="auth_verify_failed">Sign-in could not be verified. Please try again.</string>
     <string name="auth_no_browser">No browser available to sign in with.</string>
     <string name="auth_no_google_account">No Google account on this phone. Add one in Android’s settings, then try again.</string>
-    <string name="auth_sheet_unavailable">Google’s sign-in sheet could not finish. Try “Trouble signing in?” below.</string>
+    <string name="auth_sheet_dialog_title_no_account">Google had no account to offer</string>
+    <string name="auth_sheet_dialog_body_no_account">Either there’s no Google account on this phone, or this build isn’t registered with Google yet. Signing in through a secure browser tab works either way — you can use an account already on the phone, or add a new one.</string>
+    <string name="auth_sheet_dialog_title_setup">This build isn’t registered with Google yet</string>
+    <string name="auth_sheet_dialog_body_setup">Google only issues a sign-in to an app it knows, and this one hasn’t been added to the Google Cloud project yet — see SETUP-GOOGLE-SIGNIN.md. Until it is, signing in through a secure browser tab works and gives you the same account.</string>
+    <string name="auth_sheet_dialog_title">Google’s account sheet didn’t open</string>
+    <string name="auth_sheet_dialog_body">This device wouldn’t show Google’s account picker. You can still sign in with Google through a secure browser tab — same account, same result.</string>
+    <string name="auth_sheet_dialog_continue">Continue in browser</string>
     <string name="auth_native_rejected">Google signed you in, but the server would not accept it. Try “Trouble signing in?” below.</string>
 
     <!-- Confirmations -->
