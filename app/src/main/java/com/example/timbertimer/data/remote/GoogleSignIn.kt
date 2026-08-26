@@ -1,6 +1,7 @@
 package com.example.timbertimer.data.remote
 
 import android.content.Context
+import android.util.Log
 import androidx.credentials.ClearCredentialStateRequest
 import androidx.credentials.CredentialManager
 import androidx.credentials.CredentialOption
@@ -111,19 +112,44 @@ class GoogleSignIn(
             Result.Token(GoogleIdTokenCredential.createFrom(credential.data).idToken, rawNonce)
         }
     } catch (cancelled: GetCredentialCancellationException) {
-        Result.Cancelled
+        // Two very different things arrive here, and telling them apart is the
+        // whole point of this branch.
+        //
+        // One is a real dismissal: the user tapped outside the sheet, which is
+        // an answer and deserves silence. The other is Play Services *refusing*
+        // the request — a mis-registered signing certificate, an account that
+        // needs re-authenticating — which it reports by finishing its own
+        // activity as "cancelled", with the reason only in the message
+        // ("[16] Account reauth failed.", "[28444] Developer console is not set
+        // up correctly.", …).
+        //
+        // Treating the second as the first is what left sign-in silently doing
+        // nothing at all: no message, no fallback, straight back to the screen
+        // it started from. A refusal is a failure, so it is reported as one and
+        // takes the browser route, which does not depend on any of this.
+        if (cancelled.isProviderFailure()) {
+            Log.w(TAG, "Play Services refused the credential request", cancelled)
+            Result.Unavailable(cancelled.message)
+        } else {
+            Log.i(TAG, "Credential sheet dismissed by the user")
+            Result.Cancelled
+        }
     } catch (empty: NoCredentialException) {
+        Log.i(TAG, "No Google credential available on this device", empty)
         Result.NoAccount
     } catch (missing: GetCredentialProviderConfigurationException) {
         // No Play Services, or a build of Android with no credential provider
         // at all. Nothing on this device can show the sheet.
+        Log.w(TAG, "No credential provider on this device", missing)
         Result.Unavailable(missing.message)
     } catch (error: GetCredentialException) {
         // Most often this build's signing certificate is not registered against
         // an Android OAuth client for this package. Not latched: it is also what
         // a dropped connection looks like, and that fixes itself.
+        Log.w(TAG, "Credential request failed: ${error.type}", error)
         Result.Unavailable(error.message)
     } catch (error: Exception) {
+        Log.w(TAG, "Credential request failed", error)
         Result.Unavailable(error.message)
     }
 
@@ -136,6 +162,24 @@ class GoogleSignIn(
         MessageDigest.getInstance("SHA-256")
             .digest(value.toByteArray(Charsets.UTF_8))
             .joinToString("") { "%02x".format(it) }
+
+    /**
+     * True when a "cancellation" is really Play Services refusing the request.
+     *
+     * Its refusals carry their status code in the message — `[16] Account
+     * reauth failed.`, `[28444] Developer console is not set up correctly.` —
+     * while a dismissal by the user carries no code at all. That bracketed
+     * number is the only thing separating the two by the time it reaches here.
+     */
+    private fun GetCredentialCancellationException.isProviderFailure(): Boolean =
+        PROVIDER_STATUS_CODE.containsMatchIn(message.orEmpty())
+
+    private companion object {
+        const val TAG = "GoogleSignIn"
+
+        /** A leading `[16]`-style Play Services status code. */
+        val PROVIDER_STATUS_CODE = Regex("""\[\d+]""")
+    }
 
     sealed interface Result {
         /** [rawNonce] is what Supabase re-hashes to verify [idToken]. */

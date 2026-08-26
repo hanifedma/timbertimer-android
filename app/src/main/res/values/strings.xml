@@ -172,6 +172,7 @@
     <string name="account_status_local">Records are saved on this device.</string>
     <string name="account_status_cloud">Use Google to sync records across devices.</string>
     <string name="account_continue_google">Continue with Google</string>
+    <string name="account_other_way">Trouble signing in? Use the browser</string>
     <string name="account_sign_out">Sign out</string>
     <string name="account_delete_all">Delete all records</string>
     <string name="badge_local">Local</string>

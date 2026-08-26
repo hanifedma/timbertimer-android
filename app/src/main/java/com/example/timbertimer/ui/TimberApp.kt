@@ -113,6 +113,7 @@ fun TimberApp(
     language: String,
     onLanguageChange: (String) -> Unit,
     onSignIn: () -> Unit,
+    onSignInWithBrowser: () -> Unit,
     onAddWidget: () -> Unit,
     onAddTodayWidget: () -> Unit,
     onIgnoreBatteryOptimisation: () -> Unit,
@@ -399,6 +400,7 @@ fun TimberApp(
                                 onManageProjects = { managingProjects = true },
                                 projectsSyncBlocked = projectsSyncBlocked,
                                 onSignIn = onSignIn,
+                                onSignInWithBrowser = onSignInWithBrowser,
                                 onSignOut = viewModel::signOut,
                                 onDeleteAll = { confirmDeleteAll = true },
                             )

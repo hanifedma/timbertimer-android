@@ -110,6 +110,7 @@ class MainActivity : ComponentActivity() {
                         }
                     },
                     onSignIn = ::signInWithGoogle,
+                    onSignInWithBrowser = ::signInWithBrowser,
                     onAddWidget = { requestPinWidget(TodoWidget::class.java) },
                     onAddTodayWidget = { requestPinWidget(TodayTodoWidget::class.java) },
                     onIgnoreBatteryOptimisation = ::requestIgnoreBatteryOptimisation,
@@ -329,9 +330,26 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * The browser route, asked for directly.
+     *
+     * Offered in Settings rather than only reached by a native failure the app
+     * managed to classify, because Play Services has more ways to refuse than
+     * can be enumerated — and this route depends on none of them.
+     */
+    private fun signInWithBrowser() {
+        lifecycleScope.launch { openAuthInBrowser() }
+    }
+
     private suspend fun openAuthInBrowser() {
         val url = viewModel.authorizeUrl()
-        if (url != null) openInCustomTab(url)
+        // Null means the verifier could not be stored, which would otherwise
+        // fail silently — the one thing sign-in must never do again.
+        if (url == null) {
+            viewModel.notify(R.string.auth_verify_failed)
+            return
+        }
+        openInCustomTab(url)
     }
 
     /**

@@ -14,6 +14,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -64,6 +65,7 @@ fun SettingsScreen(
     onManageProjects: () -> Unit,
     projectsSyncBlocked: Boolean,
     onSignIn: () -> Unit,
+    onSignInWithBrowser: () -> Unit,
     onSignOut: () -> Unit,
     onDeleteAll: () -> Unit,
     modifier: Modifier = Modifier,
@@ -97,6 +99,22 @@ fun SettingsScreen(
             if (session == null) {
                 Button(onClick = onSignIn, modifier = Modifier.fillMaxWidth()) {
                     Text(stringResource(R.string.account_continue_google))
+                }
+                // The way out when the account sheet will not complete — a
+                // mis-registered signing certificate, an account needing
+                // re-authentication. The browser route depends on none of
+                // that, so it is always offered rather than only reached by
+                // a failure the app managed to detect. The website carries
+                // the same escape hatch, in the same words.
+                TextButton(
+                    onClick = onSignInWithBrowser,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(
+                        text = stringResource(R.string.account_other_way),
+                        style = MaterialTheme.typography.labelMedium,
+                        textAlign = TextAlign.Center,
+                    )
                 }
             } else {
                 OutlinedButton(onClick = onSignOut, modifier = Modifier.fillMaxWidth()) {

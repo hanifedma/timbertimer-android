@@ -805,6 +805,11 @@ class TimberViewModel(
                 repository.refresh()
                 engine.hydrate()
             }
+            // Logged rather than swallowed: Supabase's own wording ("Unacceptable
+            // audience", "Invalid nonce", …) names which half of the setup is
+            // wrong, and without it a refusal here is indistinguishable from the
+            // sheet never having worked at all.
+            .onFailure { android.util.Log.w("TimberAuth", "Supabase refused the Google ID token", it) }
             .isSuccess
 
     fun handleAuthCallback(uri: Uri) {
