@@ -215,6 +215,16 @@
             android:label="@string/widget_today_name">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <!--
+                  Midnight is a change only this widget can see coming: the day
+                  it is showing ends without any note changing to say so. These
+                  three are the system's own announcements of it, and they are
+                  what keeps yesterday's list from sitting on the home screen
+                  until something else happens to wake the app.
+                -->
+                <action android:name="android.intent.action.DATE_CHANGED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"

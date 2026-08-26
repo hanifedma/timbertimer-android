@@ -397,6 +397,12 @@ class TimerEngine(
         applyTimer(updated)
         if (projectId != null) repository.rememberTaskProject(nextTitle, nextProjectId)
         scope.launch {
+            // The session may have been finished — or replaced by one started
+            // elsewhere — between the edit and this push. Publishing then would
+            // put a row back for a session that is already recorded and gone,
+            // and every other device would go on showing it as still running
+            // with nothing left that would ever clear it.
+            if (_timer.value?.id != updated.id || completing) return@launch
             // A blank title fails the cloud row's own constraint; wait for the
             // fallback rather than push it.
             if (nextTitle.isNotBlank() && repository.pushCloudTimer(updated)) markSynced()

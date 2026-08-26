@@ -37,6 +37,26 @@ class TodayTodoWidget : AppWidgetProvider() {
         appWidgetIds.forEach { id -> render(context, appWidgetManager, id) }
     }
 
+    /**
+     * The day turning over is the one change this widget has to notice that
+     * nothing in the data announces: yesterday's list is not today's, yet not
+     * a single note differs. The app's own clock cannot be relied on to say
+     * so — it stops ticking when no timer runs and no screen is open, which
+     * is exactly the state a phone is in at midnight — and this widget is
+     * deliberately not on a polling schedule. So the system's own
+     * date-changed broadcast is what wakes it, which is what that broadcast
+     * is for.
+     */
+    override fun onReceive(context: Context, intent: Intent) {
+        super.onReceive(context, intent)
+        when (intent.action) {
+            Intent.ACTION_DATE_CHANGED,
+            Intent.ACTION_TIME_CHANGED,
+            Intent.ACTION_TIMEZONE_CHANGED,
+            -> refresh(context)
+        }
+    }
+
     companion object {
         const val ACTION_TOGGLE = "com.example.timbertimer.widget.TODAY_TOGGLE"
         const val ACTION_OPEN = "com.example.timbertimer.widget.TODAY_OPEN"
