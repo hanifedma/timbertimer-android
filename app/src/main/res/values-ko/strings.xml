@@ -215,8 +215,8 @@
     <string name="auth_verify_failed">로그인을 확인하지 못했어요. 다시 시도해 주세요.</string>
     <string name="auth_no_browser">로그인에 사용할 브라우저가 없어요.</string>
     <string name="auth_no_google_account">이 휴대폰에 Google 계정이 없어요. Android 설정에서 추가한 뒤 다시 시도해 주세요.</string>
-    <string name="auth_sheet_unavailable">이 휴대폰에서는 Google 로그인 시트를 쓸 수 없어요. 브라우저로 진행할게요.</string>
-    <string name="auth_native_rejected">Google 로그인은 됐지만 서버가 받아주지 않았어요. 브라우저로 진행할게요.</string>
+    <string name="auth_sheet_unavailable">Google 로그인 시트를 완료하지 못했어요. 아래 “로그인이 안 되나요?”를 사용해 보세요.</string>
+    <string name="auth_native_rejected">Google 로그인은 됐지만 서버가 받아주지 않았어요. 아래 “로그인이 안 되나요?”를 사용해 보세요.</string>
 
     <!-- Confirmations -->
     <string name="confirm_delete_all_cloud">모든 클라우드 기록을 삭제할까요? 되돌릴 수 없어요.</string>

@@ -306,14 +306,19 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             val container = (application as TimberApplication).container
             when (val result = container.googleSignIn.requestIdToken(this@MainActivity)) {
+                // Every failure below says what went wrong and stops there.
+                // None of them reaches for the browser on the user's behalf:
+                // the account sheet is the sign-in people chose by tapping
+                // "Continue with Google", and being posted into a browser
+                // instead is a different thing than the one they asked for.
+                // The way across is offered in Settings, one tap away, and
+                // taking it stays their decision.
                 is GoogleSignIn.Result.Token -> {
                     if (viewModel.completeGoogleSignIn(result.idToken, result.rawNonce)) return@launch
                     // Google minted a token and Supabase would not take it —
                     // almost always because this client id is not on the Google
-                    // provider's Authorized Client IDs list. The browser flow
-                    // does not go through that check, so it is worth a try.
+                    // provider's Authorized Client IDs list.
                     viewModel.notify(R.string.auth_native_rejected)
-                    openAuthInBrowser()
                 }
 
                 // Dismissing the sheet is an answer, not a failure.
@@ -322,10 +327,8 @@ class MainActivity : ComponentActivity() {
                 // Nothing to choose from, and the branded flow added nothing.
                 GoogleSignIn.Result.NoAccount -> viewModel.notify(R.string.auth_no_google_account)
 
-                is GoogleSignIn.Result.Unavailable -> {
+                is GoogleSignIn.Result.Unavailable ->
                     viewModel.notify(R.string.auth_sheet_unavailable)
-                    openAuthInBrowser()
-                }
             }
         }
     }

@@ -218,8 +218,8 @@
     <string name="auth_verify_failed">Sign-in could not be verified. Please try again.</string>
     <string name="auth_no_browser">No browser available to sign in with.</string>
     <string name="auth_no_google_account">No Google account on this phone. Add one in Android’s settings, then try again.</string>
-    <string name="auth_sheet_unavailable">Google’s sign-in sheet is unavailable on this phone. Falling back to the browser.</string>
-    <string name="auth_native_rejected">Google signed you in, but the server would not accept it. Falling back to the browser.</string>
+    <string name="auth_sheet_unavailable">Google’s sign-in sheet could not finish. Try “Trouble signing in?” below.</string>
+    <string name="auth_native_rejected">Google signed you in, but the server would not accept it. Try “Trouble signing in?” below.</string>
 
     <!-- Confirmations -->
     <string name="confirm_delete_all_cloud">Delete all cloud records? This cannot be undone.</string>
