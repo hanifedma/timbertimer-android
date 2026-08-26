@@ -11,6 +11,7 @@ import com.example.timbertimer.data.model.DataMode
 import com.example.timbertimer.data.model.FocusRecord
 import com.example.timbertimer.data.model.Limits
 import com.example.timbertimer.data.model.Note
+import com.example.timbertimer.data.model.NoteList
 import com.example.timbertimer.data.model.Project
 import com.example.timbertimer.data.model.ProjectBook
 import com.example.timbertimer.data.model.Projects
@@ -699,12 +700,41 @@ class TimberRepository(
 
     // ---------- to-do ----------
 
-    suspend fun addNote(text: String) = notesLock.withLock {
+    suspend fun addNote(text: String, list: NoteList = NoteList.GENERAL) = notesLock.withLock {
         val trimmed = text.trim().take(Limits.NOTE_MAX)
         if (trimmed.isEmpty()) return@withLock
         val now = System.currentTimeMillis()
-        val note = Note(UUID.randomUUID().toString(), trimmed, done = false, createdAt = now, updatedAt = now)
+        val note = Note(
+            id = UUID.randomUUID().toString(),
+            text = trimmed,
+            done = false,
+            list = list,
+            // Always today's actual date, regardless of which day the Today
+            // list happens to be showing — adding is only ever offered while
+            // that day is on screen, but this is the truth even so.
+            forDate = if (list == NoteList.TODAY) Time.localDateKey(now) else null,
+            createdAt = now,
+            updatedAt = now,
+        )
         _notes.value = listOf(note) + _notes.value
+        persistNotes()
+    }
+
+    /**
+     * Moves a note to the other list. Its place in the stored list (and so its
+     * rough position relative to the rest of that list) is left alone — only
+     * which list, and moving into Today, which day, changes; the next save
+     * recomputes per-list order.
+     */
+    suspend fun moveNote(id: String, targetList: NoteList) = notesLock.withLock {
+        val note = _notes.value.firstOrNull { it.id == id } ?: return@withLock
+        if (note.list == targetList) return@withLock
+        val updated = note.copy(
+            list = targetList,
+            forDate = if (targetList == NoteList.TODAY) Time.localDateKey(System.currentTimeMillis()) else null,
+            updatedAt = System.currentTimeMillis(),
+        )
+        _notes.value = _notes.value.map { if (it.id == id) updated else it }
         persistNotes()
     }
 
@@ -801,7 +831,13 @@ class TimberRepository(
 
         val token = auth.validAccessToken()
         if (token != null) {
-            val rows = ordered.mapIndexed { index, note ->
+            // Position is tracked per list (each starts its own count at 0) so
+            // the two lists don't shuffle each other just because they share
+            // one table.
+            val listCounters = mutableMapOf(NoteList.GENERAL to 0, NoteList.TODAY to 0)
+            val rows = ordered.map { note ->
+                val position = listCounters.getValue(note.list)
+                listCounters[note.list] = position + 1
                 NoteUpsert(
                     id = note.id,
                     userId = user.userId,
@@ -809,7 +845,9 @@ class TimberRepository(
                     done = note.done,
                     createdAt = Time.toIso(note.createdAt),
                     updatedAt = Time.toIso(note.updatedAt),
-                    sortOrder = index,
+                    sortOrder = position,
+                    list = note.list.wire,
+                    forDate = note.forDate,
                 )
             }
             runCatching { api.upsertNotes(token, rows) }.onFailure { logSync(it) }
@@ -987,18 +1025,29 @@ class TimberRepository(
             .sumOf { it.actualMinutes }
     }
 
-    private fun toNote(row: NoteRow) = Note(
-        id = row.id,
-        text = row.text.take(Limits.NOTE_MAX),
-        done = row.done,
-        createdAt = Time.parseIso(row.createdAt) ?: System.currentTimeMillis(),
-        updatedAt = Time.parseIso(row.updatedAt) ?: System.currentTimeMillis(),
-    )
+    private fun toNote(row: NoteRow): Note {
+        val list = NoteList.from(row.list)
+        val createdAt = Time.parseIso(row.createdAt) ?: System.currentTimeMillis()
+        return Note(
+            id = row.id,
+            text = row.text.take(Limits.NOTE_MAX),
+            done = row.done,
+            list = list,
+            // A today note written before for_date existed (or read from a
+            // database that predates that column) is placed on the day it was
+            // created rather than lost.
+            forDate = if (list == NoteList.TODAY) row.forDate ?: Time.localDateKey(createdAt) else null,
+            createdAt = createdAt,
+            updatedAt = Time.parseIso(row.updatedAt) ?: System.currentTimeMillis(),
+        )
+    }
 
     private fun toRow(note: Note) = NoteRow(
         id = note.id,
         text = note.text,
         done = note.done,
+        list = note.list.wire,
+        forDate = note.forDate,
         createdAt = Time.toIso(note.createdAt),
         updatedAt = Time.toIso(note.updatedAt),
     )

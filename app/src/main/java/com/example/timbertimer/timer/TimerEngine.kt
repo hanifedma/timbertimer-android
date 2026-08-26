@@ -366,6 +366,44 @@ class TimerEngine(
     }
 
     /**
+     * Edits the stopwatch already under way: what to call it, and which
+     * project it belongs to (and so which tree it is growing — the tree is
+     * the project's, not the session's, exactly as it is when nothing is
+     * running).
+     *
+     * A stopwatch only. It is open-ended — measured against nothing — so what
+     * the session *is* can still be decided while it runs. A countdown was
+     * started against a specific goal and its identity is fixed the moment it
+     * begins, which is the rule it has always had.
+     *
+     * Nothing about timing changes here either way: duration and mode are
+     * fixed once a session exists. Either argument may be omitted to leave
+     * that half alone.
+     */
+    fun updateRunning(title: String? = null, projectId: String? = null) {
+        val current = _timer.value ?: return
+        if (current.mode != TimerMode.STOPWATCH) return
+        // Deliberately not run through RecordMapper.cleanTitle: that forces a
+        // blank value to the default title, which would fight every keystroke
+        // of someone clearing the field to retype it. A blank title is left as
+        // one here; the field restores the fallback itself on losing focus
+        // (see FocusScreen's SetupPanel), the same way the untouched field
+        // does before a session even starts.
+        val nextTitle = title?.take(Limits.TITLE_MAX) ?: current.title
+        val nextProjectId = projectId?.let { repository.projects.value[it].id } ?: current.projectId
+        if (nextTitle == current.title && nextProjectId == current.projectId) return
+
+        val updated = current.copy(title = nextTitle, projectId = nextProjectId, cloudSynced = false)
+        applyTimer(updated)
+        if (projectId != null) repository.rememberTaskProject(nextTitle, nextProjectId)
+        scope.launch {
+            // A blank title fails the cloud row's own constraint; wait for the
+            // fallback rather than push it.
+            if (nextTitle.isNotBlank() && repository.pushCloudTimer(updated)) markSynced()
+        }
+    }
+
+    /**
      * The Finish button.
      *
      * A countdown that has not run out is not an abandoned session any more —
@@ -412,9 +450,13 @@ class TimerEngine(
                 .coerceIn(1, Limits.MINUTES_MAX)
             val now = System.currentTimeMillis()
 
+            // A live-edited title can be left blank (see updateRunning); the
+            // same fallback Start uses keeps a blank name from failing the
+            // record's own not-null constraint.
+            val title = timer.title.ifBlank { repository.projects.value[timer.projectId].name }
             val record = FocusRecord(
                 id = UUID.randomUUID().toString(),
-                title = timer.title,
+                title = title,
                 projectId = timer.projectId,
                 actualMinutes = actual,
                 startedAt = timer.startedAt,
@@ -657,8 +699,15 @@ class TimerEngine(
 
             is CloudTimer.Running -> {
                 val current = _timer.value
+                // Title and project are compared too now that a running
+                // session can be renamed or reprojected in place — without
+                // this a rename made on another device would reach the poll
+                // but never actually be adopted, since neither the id nor the
+                // start time changed.
                 if (current == null || current.id != cloud.timer.id ||
-                    current.startedAt != cloud.timer.startedAt
+                    current.startedAt != cloud.timer.startedAt ||
+                    current.title != cloud.timer.title ||
+                    current.projectId != cloud.timer.projectId
                 ) {
                     applyTimer(cloud.timer)
                 }

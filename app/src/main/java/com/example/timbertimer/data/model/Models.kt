@@ -87,11 +87,30 @@ data class FocusRecord(
         get() = TreeSpecies.byLabelOrId(treeKind) ?: TreeSpecies.PINE
 }
 
-/** One row of `public.notes` — an item on the shared to-do list. */
+/** Which of the two to-do lists a note belongs to. */
+enum class NoteList(val wire: String) {
+    GENERAL("general"),
+    TODAY("today");
+
+    companion object {
+        fun from(value: String?): NoteList = if (value == TODAY.wire) TODAY else GENERAL
+    }
+}
+
+/**
+ * One row of `public.notes` — an item on one of the two to-do lists.
+ *
+ * [forDate] only means anything for [NoteList.TODAY]: the day (yyyy-MM-dd,
+ * local) it was written on, which is what lets that list start blank every
+ * day while a past day's is still there to look back at. It is null for
+ * [NoteList.GENERAL], which has no day of its own.
+ */
 data class Note(
     val id: String,
     val text: String,
     val done: Boolean,
+    val list: NoteList = NoteList.GENERAL,
+    val forDate: String? = null,
     val createdAt: Long,
     val updatedAt: Long,
 )

@@ -74,6 +74,15 @@
     <string name="notes_delete">할 일 삭제</string>
     <string name="notes_move_up">위로 이동</string>
     <string name="notes_move_down">아래로 이동</string>
+    <string name="notes_today_kicker">오늘 집중할 일</string>
+    <string name="notes_today_title">오늘</string>
+    <string name="notes_today_placeholder">오늘 무엇에 집중할까요?</string>
+    <string name="notes_today_empty">아직 오늘 할 일이 없어요.</string>
+    <string name="notes_today_empty_past">그날은 계획된 일이 없었어요.</string>
+    <string name="notes_move_to_today">오늘로 옮기기</string>
+    <string name="notes_move_to_general">투두로 옮기기</string>
+    <string name="notes_back_to_today">오늘</string>
+    <string name="notes_viewing_past">지난 날을 보고 있어요 — 할 일은 오늘 화면에서 추가하세요.</string>
 
     <!-- Records -->
     <string name="records_kicker">숲 기록</string>
@@ -267,6 +276,10 @@
     <string name="widget_description">홈 화면에서 할 일을 확인하세요. 동그라미를 누르면 완료로 표시돼요.</string>
     <string name="widget_empty">아직 할 일이 없어요.\n+ 를 눌러 추가하세요.</string>
     <string name="widget_count">%2$d개 중 %1$d개</string>
+    <string name="widget_today_pin">홈 화면에 오늘 위젯 추가</string>
+    <string name="widget_today_name">오늘 리스트</string>
+    <string name="widget_today_description">홈 화면에서 오늘의 할 일만 확인하세요 — 매일 새롭게 시작돼요.</string>
+    <string name="widget_today_empty">아직 오늘 할 일이 없어요.\n+ 를 눌러 추가하세요.</string>
 
     <string name="notif_channel_idle">알림</string>
     <string name="notif_channel_idle_desc">아무것도 자라지 않을 때 조용히 알려줘요.</string>

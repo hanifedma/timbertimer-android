@@ -8,20 +8,36 @@ import android.widget.RemoteViews
 import android.widget.RemoteViewsService
 import androidx.core.content.ContextCompat
 import com.example.timbertimer.R
+import com.example.timbertimer.core.Time
 import com.example.timbertimer.data.local.LocalStore
 import com.example.timbertimer.data.local.WidgetNote
 
-/** Supplies the widget's scrolling list of tasks. */
-class TodoWidgetService : RemoteViewsService() {
+/** Supplies the Today widget's scrolling list of tasks. */
+class TodayTodoWidgetService : RemoteViewsService() {
 
     override fun onGetViewFactory(intent: Intent): RemoteViewsFactory =
-        TodoWidgetFactory(applicationContext)
+        TodayTodoWidgetFactory(applicationContext)
+
+    companion object {
+        /**
+         * Today's notes, filtered fresh against the clock rather than against
+         * whatever day a stale snapshot might have been written on — so if the
+         * widget goes a while without an explicit push (see
+         * [com.example.timbertimer.TimberApplication]'s widget-sync collector),
+         * the *next* redraw still lands on the right day rather than perpetuating
+         * a wrong one.
+         */
+        fun todaysNotes(context: Context): List<WidgetNote> {
+            val todayKey = Time.localDateKey(System.currentTimeMillis())
+            return LocalStore(context).readWidgetNotes().filter {
+                it.list == "today" && it.forDate == todayKey
+            }
+        }
+    }
 }
 
-private class TodoWidgetFactory(private val context: Context) :
+private class TodayTodoWidgetFactory(private val context: Context) :
     RemoteViewsService.RemoteViewsFactory {
-
-    private val store = LocalStore(context)
 
     /**
      * Unfinished tasks first, matching the app's own list. Held in a field
@@ -34,9 +50,7 @@ private class TodoWidgetFactory(private val context: Context) :
     override fun onCreate() = Unit
 
     override fun onDataSetChanged() {
-        // The snapshot holds both lists now; this widget only ever shows the
-        // general one — the Today list has its own widget, TodayTodoWidget.
-        val snapshot = store.readWidgetNotes().filter { it.list == "general" }
+        val snapshot = TodayTodoWidgetService.todaysNotes(context)
         notes = snapshot.filterNot { it.done } + snapshot.filter { it.done }
     }
 
@@ -95,12 +109,12 @@ private class TodoWidgetFactory(private val context: Context) :
             setOnClickFillInIntent(
                 R.id.item_check,
                 Intent()
-                    .setAction(TodoWidget.ACTION_TOGGLE)
-                    .putExtra(TodoWidget.EXTRA_NOTE_ID, note.id),
+                    .setAction(TodayTodoWidget.ACTION_TOGGLE)
+                    .putExtra(TodayTodoWidget.EXTRA_NOTE_ID, note.id),
             )
             setOnClickFillInIntent(
                 R.id.item_text,
-                Intent().setAction(TodoWidget.ACTION_OPEN),
+                Intent().setAction(TodayTodoWidget.ACTION_OPEN),
             )
         }
     }

@@ -38,6 +38,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
@@ -277,9 +278,16 @@ private fun SetupPanel(
     onManageProjects: () -> Unit,
     onSpeciesChange: (TreeSpecies) -> Unit,
 ) {
-    // Everything on this panel describes the session about to start, so a
-    // running timer locks all of it — its identity is already fixed.
-    val editable = timer == null
+    // Duration and mode are fixed once any session exists — there is nowhere
+    // for a change to those to go once it has started.
+    val setupEditable = timer == null
+    // The task name, project and tree describe *what* is running rather than
+    // *how*, and a stopwatch — measured against nothing — can still have those
+    // decided while it runs. A countdown was started against a goal, so its
+    // identity is fixed from the moment it begins. See
+    // TimberViewModel.sessionEditsAllowed, which is the same rule the engine
+    // and the web client enforce.
+    val sessionEditable = timer == null || timer.mode == TimerMode.STOPWATCH
     val project = book[form.projectId]
 
     Panel(kicker = stringResource(R.string.field_session)) {
@@ -292,20 +300,20 @@ private fun SetupPanel(
                 )
             },
             onSelect = onModeChange,
-            enabled = editable,
+            enabled = setupEditable,
             modifier = Modifier.fillMaxWidth(),
         )
 
         Spacer(Modifier.height(14.dp))
 
-        // Managing projects stays available while a session runs; only choosing
-        // a different one for *this* session does not.
+        // Managing projects stays available while any session runs; moving
+        // *this* session to a different one is a stopwatch's privilege.
         Row(verticalAlignment = Alignment.CenterVertically) {
             ProjectPicker(
                 book = book,
                 selectedId = form.projectId,
                 onSelect = onProjectChange,
-                enabled = editable,
+                enabled = sessionEditable,
                 modifier = Modifier.weight(1f),
             )
             Spacer(Modifier.width(4.dp))
@@ -319,17 +327,36 @@ private fun SetupPanel(
 
         Spacer(Modifier.height(10.dp))
 
+        // Resolved here, in the composable's own scope, rather than inside the
+        // onFocusChanged lambda below — that lambda is a plain callback, not a
+        // @Composable context, so it cannot call projectLabel() itself.
+        val fallbackTitle = projectLabel(project)
+
         OutlinedTextField(
             value = form.title,
             onValueChange = onTitleChange,
-            enabled = editable,
+            enabled = sessionEditable,
             singleLine = true,
             label = { Text(stringResource(R.string.field_task)) },
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .onFocusChanged { state ->
+                    // Leaving a running stopwatch's name empty would otherwise
+                    // save a blank title; restore the project's name, the same
+                    // fallback Start uses for a session begun with nothing
+                    // typed (see TimerEngine.updateRunning for why this isn't
+                    // done on every keystroke instead). A countdown's field is
+                    // disabled, so it never reaches this.
+                    if (!state.isFocused && timer?.mode == TimerMode.STOPWATCH &&
+                        form.title.isBlank()
+                    ) {
+                        onTitleChange(fallbackTitle)
+                    }
+                },
         )
 
-        if (editable && suggestions.isNotEmpty()) {
+        if (sessionEditable && suggestions.isNotEmpty()) {
             Spacer(Modifier.height(8.dp))
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(suggestions, key = { it }) { suggestion ->
@@ -357,7 +384,7 @@ private fun SetupPanel(
                     val selected = form.durationMinutes == minutes
                     OutlinedButton(
                         onClick = { onDurationChange(minutes) },
-                        enabled = editable,
+                        enabled = setupEditable,
                         contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
                         colors = if (selected) {
                             ButtonDefaults.outlinedButtonColors(
@@ -374,7 +401,7 @@ private fun SetupPanel(
             Spacer(Modifier.height(8.dp))
             DurationField(
                 minutes = form.durationMinutes,
-                enabled = editable,
+                enabled = setupEditable,
                 onDurationChange = onDurationChange,
             )
         }
@@ -393,7 +420,7 @@ private fun SetupPanel(
             selected = project.tree,
             color = project.color,
             onSelect = onSpeciesChange,
-            enabled = !project.missing,
+            enabled = sessionEditable && !project.missing,
             // Only where it is already the answer — otherwise the row would show
             // nothing selected for a project that grows one.
             includeWilted = project.tree == TreeSpecies.WILTED.id,

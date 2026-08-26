@@ -205,6 +205,31 @@
             android:exported="false"
             android:permission="android.permission.BIND_REMOTEVIEWS" />
 
+        <!--
+          The Today widget: same three pieces as the general to-do widget above,
+          scoped to today's list instead. See widget/TodayTodoWidget.kt.
+        -->
+        <receiver
+            android:name=".widget.TodayTodoWidget"
+            android:exported="true"
+            android:label="@string/widget_today_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/today_widget_info" />
+        </receiver>
+
+        <receiver
+            android:name=".widget.TodayTodoWidgetActions"
+            android:exported="false" />
+
+        <service
+            android:name=".widget.TodayTodoWidgetService"
+            android:exported="false"
+            android:permission="android.permission.BIND_REMOTEVIEWS" />
+
         <!-- Restores the ongoing notification for a timer that outlived a reboot. -->
         <receiver
             android:name=".timer.BootCompletedReceiver"

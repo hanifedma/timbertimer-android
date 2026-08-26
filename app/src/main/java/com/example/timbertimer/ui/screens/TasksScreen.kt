@@ -15,9 +15,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DragIndicator
+import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -25,6 +29,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -38,6 +43,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -52,27 +58,139 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import com.example.timbertimer.R
+import com.example.timbertimer.core.Time
 import com.example.timbertimer.data.model.Limits
 import com.example.timbertimer.data.model.Note
+import com.example.timbertimer.data.model.NoteList
 import com.example.timbertimer.ui.components.Panel
+import com.example.timbertimer.ui.components.currentLocale
 import kotlin.math.abs
 
 /**
- * The shared to-do list.
+ * The two to-do lists: Today, scoped to a single day and blank on a new one,
+ * and the general list, which is exactly what the shared list always was.
  *
- * Reordering is a drag on the grip handle, as on the website. Rows can wrap to
- * two lines, so the drop target is worked out from each row's measured height
- * rather than from a nominal one — with a fixed guess, one long task is enough
- * to make every drop after it land a row off.
+ * A note can move between the two with a tap (see [NoteRow]'s move button) —
+ * there is no drag between them, only within one, which is what keeps the
+ * gesture unambiguous. Reordering within a list is a drag on the grip handle,
+ * as on the website.
  */
 @Composable
 fun TasksScreen(
+    generalNotes: List<Note>,
+    todayNotes: List<Note>,
+    todayAnchor: Long,
+    onAdd: (String, NoteList) -> Unit,
+    onToggle: (String) -> Unit,
+    onDelete: (String) -> Unit,
+    onMove: (String, NoteList) -> Unit,
+    onReorder: (List<String>) -> Unit,
+    onShiftDay: (Int) -> Unit,
+    onBackToToday: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val locale = currentLocale()
+    val viewingToday = remember(todayAnchor) {
+        Time.localDateKey(todayAnchor) == Time.localDateKey(System.currentTimeMillis())
+    }
+
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        NoteListPanel(
+            notes = todayNotes,
+            kicker = stringResource(R.string.notes_today_kicker),
+            title = if (viewingToday) {
+                stringResource(R.string.notes_today_title)
+            } else {
+                Time.shortDayLabel(todayAnchor, locale)
+            },
+            placeholder = stringResource(R.string.notes_today_placeholder),
+            emptyText = stringResource(
+                if (viewingToday) R.string.notes_today_empty else R.string.notes_today_empty_past
+            ),
+            showAddForm = viewingToday,
+            pastHint = if (viewingToday) null else stringResource(R.string.notes_viewing_past),
+            moveIcon = Icons.AutoMirrored.Filled.List,
+            moveLabel = stringResource(R.string.notes_move_to_general),
+            onAdd = { text -> onAdd(text, NoteList.TODAY) },
+            onToggle = onToggle,
+            onDelete = onDelete,
+            onMove = { id -> onMove(id, NoteList.GENERAL) },
+            onReorder = onReorder,
+            headerExtra = {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    IconButton(onClick = { onShiftDay(-1) }, modifier = Modifier.size(36.dp)) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                            contentDescription = stringResource(R.string.grove_previous),
+                        )
+                    }
+                    Spacer(Modifier.width(4.dp))
+                    IconButton(
+                        onClick = { onShiftDay(1) },
+                        enabled = !viewingToday,
+                        modifier = Modifier.size(36.dp),
+                    ) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                            contentDescription = stringResource(R.string.grove_next),
+                        )
+                    }
+                    if (!viewingToday) {
+                        Spacer(Modifier.width(4.dp))
+                        TextButton(onClick = onBackToToday) {
+                            Text(stringResource(R.string.notes_back_to_today))
+                        }
+                    }
+                }
+            },
+        )
+
+        NoteListPanel(
+            notes = generalNotes,
+            kicker = stringResource(R.string.notes_kicker),
+            title = stringResource(R.string.notes_title),
+            placeholder = stringResource(R.string.notes_placeholder),
+            emptyText = stringResource(R.string.notes_empty),
+            showAddForm = true,
+            pastHint = null,
+            moveIcon = Icons.Filled.WbSunny,
+            moveLabel = stringResource(R.string.notes_move_to_today),
+            onAdd = { text -> onAdd(text, NoteList.GENERAL) },
+            onToggle = onToggle,
+            onDelete = onDelete,
+            onMove = { id -> onMove(id, NoteList.TODAY) },
+            onReorder = onReorder,
+        )
+    }
+}
+
+/**
+ * One to-do list panel: an optional header row (the Today list's day nav), an
+ * add-task field, and the reorderable list itself.
+ *
+ * Reordering is a drag on the grip handle. Rows can wrap to two lines, so the
+ * drop target is worked out from each row's measured height rather than from
+ * a nominal one — with a fixed guess, one long task is enough to make every
+ * drop after it land a row off.
+ */
+@Composable
+private fun NoteListPanel(
     notes: List<Note>,
+    kicker: String,
+    title: String,
+    placeholder: String,
+    emptyText: String,
+    showAddForm: Boolean,
+    pastHint: String?,
+    moveIcon: ImageVector,
+    moveLabel: String,
     onAdd: (String) -> Unit,
     onToggle: (String) -> Unit,
     onDelete: (String) -> Unit,
+    onMove: (String) -> Unit,
     onReorder: (List<String>) -> Unit,
     modifier: Modifier = Modifier,
+    headerExtra: (@Composable () -> Unit)? = null,
 ) {
     var draft by remember { mutableStateOf("") }
 
@@ -100,45 +218,58 @@ fun TasksScreen(
         dropTarget(from, dragDistance, rowHeights, ordered.size)
     }
 
-    Panel(
-        modifier = modifier,
-        kicker = stringResource(R.string.notes_kicker),
-        title = stringResource(R.string.notes_title),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            OutlinedTextField(
-                value = draft,
-                onValueChange = { draft = it.take(Limits.NOTE_MAX) },
-                placeholder = { Text(stringResource(R.string.notes_placeholder)) },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                keyboardActions = KeyboardActions(onDone = {
-                    if (draft.isNotBlank()) {
-                        onAdd(draft)
-                        draft = ""
-                    }
-                }),
-                modifier = Modifier.weight(1f),
-            )
-            Spacer(Modifier.width(8.dp))
-            IconButton(
-                onClick = {
-                    if (draft.isNotBlank()) {
-                        onAdd(draft)
-                        draft = ""
-                    }
-                },
-                enabled = draft.isNotBlank(),
-            ) {
-                Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.notes_add))
-            }
+    Panel(modifier = modifier, kicker = kicker, title = title) {
+        if (headerExtra != null) {
+            headerExtra()
+            Spacer(Modifier.height(8.dp))
         }
 
-        Spacer(Modifier.height(8.dp))
+        if (showAddForm) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                OutlinedTextField(
+                    value = draft,
+                    onValueChange = { draft = it.take(Limits.NOTE_MAX) },
+                    placeholder = { Text(placeholder) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = {
+                        if (draft.isNotBlank()) {
+                            onAdd(draft)
+                            draft = ""
+                        }
+                    }),
+                    modifier = Modifier.weight(1f),
+                )
+                Spacer(Modifier.width(8.dp))
+                IconButton(
+                    onClick = {
+                        if (draft.isNotBlank()) {
+                            onAdd(draft)
+                            draft = ""
+                        }
+                    },
+                    enabled = draft.isNotBlank(),
+                ) {
+                    Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.notes_add))
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+        } else if (pastHint != null) {
+            Text(
+                text = pastHint,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+            )
+            Spacer(Modifier.height(8.dp))
+        }
 
         if (ordered.isEmpty()) {
             Text(
-                text = stringResource(R.string.notes_empty),
+                text = emptyText,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
@@ -183,8 +314,11 @@ fun TasksScreen(
                         note = note,
                         position = index,
                         count = ordered.size,
+                        moveIcon = moveIcon,
+                        moveLabel = moveLabel,
                         onToggle = { onToggle(note.id) },
                         onDelete = { onDelete(note.id) },
+                        onMove = { onMove(note.id) },
                         onMoveBy = { delta ->
                             onReorder(moved(ordered.map { it.id }, index, index + delta))
                         },
@@ -280,8 +414,11 @@ private fun NoteRow(
     note: Note,
     position: Int,
     count: Int,
+    moveIcon: ImageVector,
+    moveLabel: String,
     onToggle: () -> Unit,
     onDelete: () -> Unit,
+    onMove: () -> Unit,
     onMoveBy: (Int) -> Unit,
     dragModifier: Modifier,
 ) {
@@ -326,6 +463,14 @@ private fun NoteRow(
                 .weight(1f)
                 .padding(end = 4.dp),
         )
+        IconButton(onClick = onMove, modifier = Modifier.size(36.dp)) {
+            Icon(
+                moveIcon,
+                contentDescription = moveLabel,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp),
+            )
+        }
         IconButton(onClick = onDelete, modifier = Modifier.size(36.dp)) {
             Icon(
                 Icons.Filled.Close,

@@ -60,6 +60,7 @@ fun SettingsScreen(
     onAllowDoNotDisturb: () -> Unit,
     onAllowFullScreen: () -> Unit,
     onAddWidget: () -> Unit,
+    onAddTodayWidget: () -> Unit,
     onManageProjects: () -> Unit,
     projectsSyncBlocked: Boolean,
     onSignIn: () -> Unit,
@@ -319,6 +320,18 @@ fun SettingsScreen(
             }
             Text(
                 text = stringResource(R.string.widget_description),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+
+            Spacer(Modifier.height(12.dp))
+
+            OutlinedButton(onClick = onAddTodayWidget, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.widget_today_pin), textAlign = TextAlign.Center)
+            }
+            Text(
+                text = stringResource(R.string.widget_today_description),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 8.dp),

@@ -94,6 +94,10 @@ object Time {
     fun todayLabel(millis: Long, locale: Locale): String =
         DateTimeFormatter.ofPattern("EEEE, MMMM d", locale).format(localDate(millis))
 
+    /** "Tue, Aug 25" — compact enough for the Today to-do list's day nav. */
+    fun shortDayLabel(millis: Long, locale: Locale): String =
+        DateTimeFormatter.ofPattern("EEE, MMM d", locale).format(localDate(millis))
+
     fun recordDateLabel(millis: Long, locale: Locale): String =
         DateTimeFormatter
             .ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.SHORT)

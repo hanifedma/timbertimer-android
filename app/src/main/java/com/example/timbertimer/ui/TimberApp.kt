@@ -59,6 +59,7 @@ import com.example.timbertimer.MainActivity
 import com.example.timbertimer.R
 import com.example.timbertimer.core.Time
 import com.example.timbertimer.data.model.FocusRecord
+import com.example.timbertimer.data.model.NoteList
 import com.example.timbertimer.ui.components.currentLocale
 import com.example.timbertimer.ui.components.rememberClockFormat
 import com.example.timbertimer.ui.screens.CalendarScreen
@@ -113,6 +114,7 @@ fun TimberApp(
     onLanguageChange: (String) -> Unit,
     onSignIn: () -> Unit,
     onAddWidget: () -> Unit,
+    onAddTodayWidget: () -> Unit,
     onIgnoreBatteryOptimisation: () -> Unit,
     onAllowDoNotDisturb: () -> Unit,
     onAllowFullScreen: () -> Unit,
@@ -132,6 +134,7 @@ fun TimberApp(
     val records by viewModel.records.collectAsStateWithLifecycle()
     val projects by viewModel.projects.collectAsStateWithLifecycle()
     val notes by viewModel.notes.collectAsStateWithLifecycle()
+    val todayNotesAnchor by viewModel.todayNotesAnchor.collectAsStateWithLifecycle()
     val grove by viewModel.grove.collectAsStateWithLifecycle()
     val calendar by viewModel.calendar.collectAsStateWithLifecycle()
     val filter by viewModel.filter.collectAsStateWithLifecycle()
@@ -150,6 +153,11 @@ fun TimberApp(
     val idleReminder by viewModel.settings.idleReminder.collectAsStateWithLifecycle()
     val backgroundSync by viewModel.settings.backgroundSync.collectAsStateWithLifecycle()
     val restAlert by viewModel.settings.restAlert.collectAsStateWithLifecycle()
+
+    // Midnight rolling past is what makes the Today list "new and blank"
+    // without any explicit reset — but only for someone who was actually
+    // looking at today live; see checkTodayNotesRollover.
+    LaunchedEffect(now) { viewModel.checkTodayNotesRollover() }
 
     // The widget opens the app at a screen rather than wherever it was left.
     LaunchedEffect(requestedDestination) {
@@ -323,12 +331,30 @@ fun TimberApp(
                         )
 
                         Destination.TASKS -> ScrollingScreen {
+                            val todayAnchorKey = remember(todayNotesAnchor) {
+                                Time.localDateKey(todayNotesAnchor)
+                            }
+                            val generalNotes = remember(notes) {
+                                notes.filter { it.list == NoteList.GENERAL }
+                            }
+                            // The repository always resolves forDate for a Today
+                            // note (falling back to its created day if it came
+                            // from before that column existed), so it is never
+                            // null here.
+                            val todayNotes = remember(notes, todayAnchorKey) {
+                                notes.filter { it.list == NoteList.TODAY && it.forDate == todayAnchorKey }
+                            }
                             TasksScreen(
-                                notes = notes,
+                                generalNotes = generalNotes,
+                                todayNotes = todayNotes,
+                                todayAnchor = todayNotesAnchor,
                                 onAdd = viewModel::addNote,
                                 onToggle = viewModel::toggleNote,
                                 onDelete = viewModel::deleteNote,
+                                onMove = viewModel::moveNote,
                                 onReorder = viewModel::reorderNotes,
+                                onShiftDay = viewModel::shiftTodayNotes,
+                                onBackToToday = viewModel::resetTodayNotesToToday,
                             )
                         }
 
@@ -369,6 +395,7 @@ fun TimberApp(
                                 onAllowDoNotDisturb = onAllowDoNotDisturb,
                                 onAllowFullScreen = onAllowFullScreen,
                                 onAddWidget = onAddWidget,
+                                onAddTodayWidget = onAddTodayWidget,
                                 onManageProjects = { managingProjects = true },
                                 projectsSyncBlocked = projectsSyncBlocked,
                                 onSignIn = onSignIn,

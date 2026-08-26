@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The Today to-do widget — same recipe as todo_widget_info.xml, reusing the
+  same layout (its title/empty text are overridden at render time; see
+  TodayTodoWidget.render).
+
+  updatePeriodMillis is 0 for the same reason: pushed the moment something
+  changes rather than polled. A day turning over with nothing else changing is
+  covered separately, by TimberApplication's own widget-sync collector, which
+  watches the clock as well as the notes.
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="180dp"
+    android:minHeight="110dp"
+    android:minResizeWidth="110dp"
+    android:minResizeHeight="70dp"
+    android:targetCellWidth="3"
+    android:targetCellHeight="3"
+    android:updatePeriodMillis="0"
+    android:initialLayout="@layout/widget_todo"
+    android:previewLayout="@layout/widget_todo"
+    android:resizeMode="horizontal|vertical"
+    android:widgetCategory="home_screen"
+    android:description="@string/widget_today_description" />

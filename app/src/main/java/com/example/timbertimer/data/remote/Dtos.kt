@@ -223,6 +223,8 @@ data class NoteRow(
     val text: String = "",
     val done: Boolean = false,
     @SerialName("sort_order") val sortOrder: Int = 0,
+    val list: String? = null,
+    @SerialName("for_date") val forDate: String? = null,
     @SerialName("created_at") val createdAt: String? = null,
     @SerialName("updated_at") val updatedAt: String? = null,
 )
@@ -236,9 +238,32 @@ data class NoteUpsert(
     @SerialName("created_at") val createdAt: String,
     @SerialName("updated_at") val updatedAt: String,
     @SerialName("sort_order") val sortOrder: Int,
-)
+    val list: String,
+    @SerialName("for_date") val forDate: String? = null,
+) {
+    /** Same row without `list`/`for_date`, for a database that has run the
+     *  sort_order migration but not the later today/general split. */
+    fun withoutTodayList() = NoteUpsertWithOrder(
+        id = id, userId = userId, text = text, done = done,
+        createdAt = createdAt, updatedAt = updatedAt, sortOrder = sortOrder,
+    )
+}
 
-/** Same row without `sort_order`, for projects whose SQL predates that column. */
+@Serializable
+data class NoteUpsertWithOrder(
+    val id: String,
+    @SerialName("user_id") val userId: String,
+    val text: String,
+    val done: Boolean,
+    @SerialName("created_at") val createdAt: String,
+    @SerialName("updated_at") val updatedAt: String,
+    @SerialName("sort_order") val sortOrder: Int,
+) {
+    /** Same row without `sort_order` either, for the oldest projects. */
+    fun withoutOrder() = NoteUpsertLegacy(id, userId, text, done, createdAt, updatedAt)
+}
+
+/** Same row without `sort_order`, `list` or `for_date`, for projects whose SQL predates all three columns. */
 @Serializable
 data class NoteUpsertLegacy(
     val id: String,

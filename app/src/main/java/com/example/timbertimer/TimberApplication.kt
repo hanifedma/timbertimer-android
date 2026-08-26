@@ -2,6 +2,7 @@ package com.example.timbertimer
 
 import android.app.Application
 import android.content.Context
+import com.example.timbertimer.core.Time
 import com.example.timbertimer.data.TimberRepository
 import com.example.timbertimer.data.local.LocalStore
 import com.example.timbertimer.data.local.SettingsStore
@@ -15,10 +16,13 @@ import com.example.timbertimer.timer.TimerAlarms
 import com.example.timbertimer.timer.TimerEngine
 import com.example.timbertimer.timer.TimerFeedback
 import com.example.timbertimer.timer.TimerNotifications
+import com.example.timbertimer.widget.TodayTodoWidget
 import com.example.timbertimer.widget.TodoWidget
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 
@@ -118,13 +122,33 @@ class AppContainer(private val context: Context) {
             }
         }
 
+        // The Today widget has to notice more than a note changing — it also has
+        // to notice the calendar day changing, with nothing about the notes
+        // themselves any different, which is what makes it blank again on a new
+        // day. Combining with the engine's own clock (already ticking whenever
+        // anything is running, the app is foregrounded, or background sync is
+        // on) and keying distinctUntilChanged on the date rather than the
+        // instant is what catches that without redrawing on every tick.
         scope.launch {
-            repository.notes.collect { notes ->
-                local.writeWidgetNotes(
-                    notes.map { WidgetNote(id = it.id, text = it.text, done = it.done) }
-                )
-                TodoWidget.refresh(context)
+            combine(repository.notes, timerEngine.now) { notes, now ->
+                notes to Time.localDateKey(now)
             }
+                .distinctUntilChanged()
+                .collect { (notes, _) ->
+                    local.writeWidgetNotes(
+                        notes.map {
+                            WidgetNote(
+                                id = it.id,
+                                text = it.text,
+                                done = it.done,
+                                list = it.list.wire,
+                                forDate = it.forDate,
+                            )
+                        }
+                    )
+                    TodoWidget.refresh(context)
+                    TodayTodoWidget.refresh(context)
+                }
         }
     }
 }

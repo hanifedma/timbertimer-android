@@ -244,12 +244,20 @@ data class StoredRest(
     val cloudSynced: Boolean,
 )
 
-/** One task as the widget needs it: what it says, and whether it is done. */
+/**
+ * One task as the widget needs it: what it says, whether it is done, which
+ * list it's on, and — for a Today task — which day. Both the general and the
+ * Today widget read from the same snapshot, each filtering to its own list;
+ * see [com.example.timbertimer.widget.TodoWidgetService] and
+ * [com.example.timbertimer.widget.TodayTodoWidgetService].
+ */
 @Serializable
 data class WidgetNote(
     val id: String,
     val text: String,
     val done: Boolean,
+    val list: String = "general",
+    val forDate: String? = null,
 )
 
 /**

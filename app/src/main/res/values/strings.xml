@@ -75,6 +75,15 @@
     <string name="notes_delete">Delete task</string>
     <string name="notes_move_up">Move up</string>
     <string name="notes_move_down">Move down</string>
+    <string name="notes_today_kicker">Today I will focus on</string>
+    <string name="notes_today_title">Today</string>
+    <string name="notes_today_placeholder">What will you focus on today?</string>
+    <string name="notes_today_empty">Nothing planned for today yet.</string>
+    <string name="notes_today_empty_past">Nothing was planned that day.</string>
+    <string name="notes_move_to_today">Move to Today</string>
+    <string name="notes_move_to_general">Move to To-Do</string>
+    <string name="notes_back_to_today">Today</string>
+    <string name="notes_viewing_past">Viewing a past day — add tasks from Today.</string>
 
     <!-- Records -->
     <string name="records_kicker">Forest record</string>
@@ -270,6 +279,10 @@
     <string name="widget_description">Your tasks on the home screen. Tap a circle to cross one off.</string>
     <string name="widget_empty">No tasks yet.\nTap + to add one.</string>
     <string name="widget_count">%1$d of %2$d</string>
+    <string name="widget_today_pin">Add the Today widget to your home screen</string>
+    <string name="widget_today_name">Today list</string>
+    <string name="widget_today_description">Just today\'s tasks on the home screen — starts fresh every day.</string>
+    <string name="widget_today_empty">Nothing planned for today yet.\nTap + to add one.</string>
 
     <string name="notif_channel_idle">Reminders</string>
     <string name="notif_channel_idle_desc">A quiet nudge to start a session when nothing is growing.</string>

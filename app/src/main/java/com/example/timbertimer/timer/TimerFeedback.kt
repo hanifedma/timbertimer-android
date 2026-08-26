@@ -35,9 +35,12 @@ import kotlin.math.sin
  * with the system notification tone — same three-note C-E-G resolve, same
  * ticking run-in over the last ten seconds.
  *
- * Everything plays through `USAGE_ALARM`: a countdown the user deliberately
- * started should still be heard over a silenced ringer, which is exactly the
- * distinction that usage draws.
+ * Everything plays through `USAGE_MEDIA` (see [mediaAudioAttributes]) rather
+ * than `USAGE_ALARM`: that is the volume slider people actually hold and
+ * adjust, where an alarm-usage tone answers only to the alarm slider — which
+ * for most people sits wherever the last morning alarm left it and ignores
+ * the volume keys entirely. The chime's own in-app slider still lets it be
+ * turned down (or up past the media ceiling) independently of that.
  */
 class TimerFeedback(
     context: Context,
@@ -291,12 +294,13 @@ class TimerFeedback(
     }
 
     /**
-     * The rest alarm's sound, filed as **media**.
+     * The sound both the rest alarm and the focus chime play through, filed as
+     * **media**.
      *
      * `USAGE_ALARM` would be the obvious choice and is not the one made here.
      * Usage decides which of the phone's volume sliders governs the sound, and
      * an alarm-usage tone answers only to the alarm slider — which is the one
-     * nobody adjusts, so the rest alarm arrived at whatever level the last
+     * nobody adjusts, so a cue on it arrived at whatever level the last
      * morning alarm was set to and ignored the volume keys entirely.
      *
      * Media is the slider people actually hold. What it costs: the alarm stream
@@ -305,10 +309,10 @@ class TimerFeedback(
      * turned off. Silent mode is unaffected either way; the ringer switch has
      * never governed media.
      *
-     * The vibration keeps `USAGE_ALARM`, below, because vibration has no volume
-     * for this to trade against and so nothing to gain by moving.
+     * The rest alarm's vibration keeps `USAGE_ALARM`, below, because vibration
+     * has no volume for this to trade against and so nothing to gain by moving.
      */
-    private fun alarmAudioAttributes(): AudioAttributes =
+    private fun mediaAudioAttributes(): AudioAttributes =
         AudioAttributes.Builder()
             .setUsage(AudioAttributes.USAGE_MEDIA)
             .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
@@ -475,7 +479,7 @@ class TimerFeedback(
 
         val created = runCatching {
             AudioTrack.Builder()
-                .setAudioAttributes(alarmAudioAttributes())
+                .setAudioAttributes(mediaAudioAttributes())
                 .setAudioFormat(
                     AudioFormat.Builder()
                         .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
@@ -533,12 +537,7 @@ class TimerFeedback(
         val bytes = samples.size * 2
         val created = runCatching {
             AudioTrack.Builder()
-                .setAudioAttributes(
-                    AudioAttributes.Builder()
-                        .setUsage(AudioAttributes.USAGE_ALARM)
-                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                        .build()
-                )
+                .setAudioAttributes(mediaAudioAttributes())
                 .setAudioFormat(
                     AudioFormat.Builder()
                         .setEncoding(AudioFormat.ENCODING_PCM_16BIT)

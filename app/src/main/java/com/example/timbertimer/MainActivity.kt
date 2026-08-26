@@ -36,6 +36,7 @@ import com.example.timbertimer.data.remote.SupabaseConfig
 import com.example.timbertimer.ui.TimberApp
 import com.example.timbertimer.ui.TimberViewModel
 import com.example.timbertimer.ui.theme.TimberTimerTheme
+import com.example.timbertimer.widget.TodayTodoWidget
 import com.example.timbertimer.widget.TodoWidget
 
 class MainActivity : ComponentActivity() {
@@ -109,7 +110,8 @@ class MainActivity : ComponentActivity() {
                         }
                     },
                     onSignIn = ::signInWithGoogle,
-                    onAddWidget = ::requestPinWidget,
+                    onAddWidget = { requestPinWidget(TodoWidget::class.java) },
+                    onAddTodayWidget = { requestPinWidget(TodayTodoWidget::class.java) },
                     onIgnoreBatteryOptimisation = ::requestIgnoreBatteryOptimisation,
                     onAllowDoNotDisturb = ::requestDoNotDisturbAccess,
                     onAllowFullScreen = ::requestFullScreenAlerts,
@@ -177,17 +179,17 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * Asks the launcher to place the to-do widget. Most people never find the
+     * Asks the launcher to place [widget]. Most people never find the
      * long-press-the-wallpaper gesture, and launchers that cannot do this say so
      * rather than leaving the button looking broken.
      */
-    private fun requestPinWidget() {
+    private fun requestPinWidget(widget: Class<*>) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
             Toast.makeText(this, R.string.widget_pin_unsupported, Toast.LENGTH_LONG).show()
             return
         }
         val manager = getSystemService(AppWidgetManager::class.java)
-        val provider = ComponentName(this, TodoWidget::class.java)
+        val provider = ComponentName(this, widget)
         val requested = manager != null &&
             manager.isRequestPinAppWidgetSupported &&
             runCatching { manager.requestPinAppWidget(provider, null, null) }.getOrDefault(false)

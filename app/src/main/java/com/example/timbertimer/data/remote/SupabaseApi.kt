@@ -319,13 +319,17 @@ class SupabaseApi(
             .addQueryParameter("on_conflict", "id")
             .build()
 
-        val withOrder = json.encodeToString(ListSerializer(NoteUpsert.serializer()), rows)
-        val attempt = runCatching { postUpsert(url, token, withOrder) }
-        if (attempt.isSuccess) return true
+        val full = json.encodeToString(ListSerializer(NoteUpsert.serializer()), rows)
+        if (runCatching { postUpsert(url, token, full) }.isSuccess) return true
 
-        val legacyRows = rows.map {
-            NoteUpsertLegacy(it.id, it.userId, it.text, it.done, it.createdAt, it.updatedAt)
-        }
+        // Most likely `list`/`for_date` (the today/general split) are missing;
+        // retry with just what an older, sort_order-only database still has.
+        val withOrderRows = rows.map { it.withoutTodayList() }
+        val withOrder = json.encodeToString(ListSerializer(NoteUpsertWithOrder.serializer()), withOrderRows)
+        if (runCatching { postUpsert(url, token, withOrder) }.isSuccess) return false
+
+        // sort_order is missing too — the oldest shape the table can be in.
+        val legacyRows = withOrderRows.map { it.withoutOrder() }
         val legacy = json.encodeToString(ListSerializer(NoteUpsertLegacy.serializer()), legacyRows)
         postUpsert(url, token, legacy)
         return false

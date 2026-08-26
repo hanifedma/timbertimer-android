@@ -15,6 +15,7 @@ import com.example.timbertimer.data.local.RestAlertStyle
 import com.example.timbertimer.data.local.SettingsStore
 import com.example.timbertimer.data.model.FocusRecord
 import com.example.timbertimer.data.model.Limits
+import com.example.timbertimer.data.model.NoteList
 import com.example.timbertimer.data.model.Project
 import com.example.timbertimer.data.model.Projects
 import com.example.timbertimer.data.model.TimerMode
@@ -278,11 +279,30 @@ class TimberViewModel(
     fun setTitle(title: String) {
         val trimmed = title.take(Limits.TITLE_MAX)
         _form.value = _form.value.copy(title = trimmed)
+        // A running stopwatch is renamed in place, not just remembered for
+        // next time — and auto-matching a project from the title, below, is a
+        // start-time convenience that a running session should not have
+        // sprung on it by a keystroke that happens to match a known task.
+        // A running countdown owns its name outright; see sessionEditsAllowed.
+        if (timer.value != null) {
+            engine.updateRunning(title = trimmed)
+            return
+        }
         settings.setSessionName(trimmed)
-        // A running timer owns its project; typing does not move it.
-        if (timer.value != null) return
         // Follow the task name that was just typed or picked, if it has a home.
         repository.projectForTitle(trimmed)?.let { setProject(it) }
+    }
+
+    /**
+     * Whether the task name, project and tree can be changed right now.
+     *
+     * A stopwatch is open-ended, so what the session *is* can still be
+     * decided while it runs; a countdown's identity is fixed the moment it
+     * starts. Mirrors the web client's `sessionEditsAllowed`.
+     */
+    fun sessionEditsAllowed(): Boolean {
+        val running = timer.value ?: return true
+        return running.mode == TimerMode.STOPWATCH
     }
 
     fun setDuration(minutes: Int) {
@@ -298,16 +318,26 @@ class TimberViewModel(
     }
 
     fun setProject(id: String) {
-        if (timer.value != null) return
+        if (!sessionEditsAllowed()) return
         _form.value = _form.value.copy(projectId = id)
         settings.setSelectedProjectId(id)
+        // The tree belongs to the project, so moving a running stopwatch to a
+        // different one changes what it's growing too — engine.updateRunning
+        // is where that actually happens; see TimerEngine.
+        if (timer.value != null) engine.updateRunning(projectId = id)
     }
 
     /**
      * The tree belongs to the project now, so choosing one here re-plants every
      * record that project ever grew.
+     *
+     * Follows the same rule the rest of the session's identity does while a
+     * timer runs — see [sessionEditsAllowed]. A project's tree can still be
+     * changed from the project sheet either way, which is not tied to what is
+     * running.
      */
     fun setProjectTree(species: TreeSpecies) {
+        if (!sessionEditsAllowed()) return
         val project = projects.value[_form.value.projectId]
         if (project.missing || project.tree == species.id) return
         viewModelScope.launch { repository.saveProject(project.copy(tree = species.id)) }
@@ -699,8 +729,8 @@ class TimberViewModel(
 
     // ---------- to-do ----------
 
-    fun addNote(text: String) {
-        viewModelScope.launch { repository.addNote(text) }
+    fun addNote(text: String, list: NoteList = NoteList.GENERAL) {
+        viewModelScope.launch { repository.addNote(text, list) }
     }
 
     fun toggleNote(id: String) {
@@ -711,8 +741,42 @@ class TimberViewModel(
         viewModelScope.launch { repository.deleteNote(id) }
     }
 
+    fun moveNote(id: String, targetList: NoteList) {
+        viewModelScope.launch { repository.moveNote(id, targetList) }
+    }
+
     fun reorderNotes(orderedIds: List<String>) {
         viewModelScope.launch { repository.reorderNotes(orderedIds) }
+    }
+
+    // ---------- the Today list's day ----------
+
+    private val _todayNotesAnchor = MutableStateFlow(Time.startOfDay(System.currentTimeMillis()))
+    val todayNotesAnchor: StateFlow<Long> = _todayNotesAnchor.asStateFlow()
+
+    /** The last "today" seen, so a real midnight rollover — advance the anchor,
+     *  but only if it was following today live — can be told apart from having
+     *  deliberately stepped back to browse an earlier day. */
+    private var todayNotesKnownDateKey = Time.localDateKey(System.currentTimeMillis())
+
+    fun shiftTodayNotes(direction: Int) {
+        val next = Time.addDays(_todayNotesAnchor.value, direction.toLong())
+        val today = Time.startOfDay(System.currentTimeMillis())
+        // Stepping forward can never pass today; there is nothing there yet.
+        _todayNotesAnchor.value = if (next > today) today else next
+    }
+
+    fun resetTodayNotesToToday() {
+        _todayNotesAnchor.value = Time.startOfDay(System.currentTimeMillis())
+    }
+
+    /** Called on every clock tick; a no-op unless the day has actually turned. */
+    fun checkTodayNotesRollover() {
+        val todayKey = Time.localDateKey(System.currentTimeMillis())
+        if (todayKey == todayNotesKnownDateKey) return
+        val wasViewingToday = Time.localDateKey(_todayNotesAnchor.value) == todayNotesKnownDateKey
+        todayNotesKnownDateKey = todayKey
+        if (wasViewingToday) _todayNotesAnchor.value = Time.startOfDay(System.currentTimeMillis())
     }
 
     // ---------- account ----------
