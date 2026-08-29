@@ -4,6 +4,8 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import com.example.timbertimer.TimberApplication
+import com.example.timbertimer.core.Time
+import com.example.timbertimer.data.local.LocalStore
 import kotlinx.coroutines.launch
 
 /**
@@ -59,11 +61,34 @@ class NotificationRestorer : BroadcastReceiver() {
                 val ringing = alarm.ringing.value ?: return
                 container.notifications.showRestAlarm(ringing.durationMinutes, ringing.loud)
             }
+
+            /**
+             * The rest count, put back after something removed it.
+             *
+             * Read from the stored snapshot rather than from the repository:
+             * this broadcast can be what starts the process, and the records
+             * would not have loaded yet. Synchronously for the same reason the
+             * alarm is — a number that blinks out and returns a moment later
+             * looks broken, where one that never left looks deliberate.
+             *
+             * The switch is checked here too, not only at the call sites. The
+             * delete intent is already sitting on a posted notification by the
+             * time the user turns the feature off, and the shade can fire it
+             * afterwards; without this, switching it off and then swiping would
+             * bring it back.
+             */
+            ACTION_RESTORE_TALLY -> {
+                if (!container.settings.restTally.value) return
+                val today = Time.localDateKey(System.currentTimeMillis())
+                val totals = LocalStore(context).readTodayTotals().forDay(today)
+                container.notifications.showRestTally(totals.rests)
+            }
         }
     }
 
     companion object {
         const val ACTION_RESTORE = "com.example.timbertimer.RESTORE_NOTIFICATION"
         const val ACTION_RESTORE_ALARM = "com.example.timbertimer.RESTORE_REST_ALARM"
+        const val ACTION_RESTORE_TALLY = "com.example.timbertimer.RESTORE_REST_TALLY"
     }
 }

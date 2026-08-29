@@ -142,6 +142,34 @@ class LocalStore(context: Context) {
     fun writeWidgetNotes(notes: List<WidgetNote>) =
         write(KEY_WIDGET_NOTES, WidgetNote.serializer(), notes)
 
+    // ---------- today's totals ----------
+
+    /**
+     * What today added up to, per project, plus how many rests it held.
+     *
+     * Written for the same reason [readWidgetNotes] is: the widget's adapter and
+     * the notification restorer can both run in a process started for them
+     * alone, where the repository has not loaded a single record yet. Reading a
+     * plain snapshot is synchronous and cannot come back empty just because a
+     * coroutine has not finished.
+     *
+     * [TodayTotals.dateKey] is stored with it so a snapshot is never mistaken
+     * for a fresher one than it is: the day can turn over while the phone sits
+     * on a table with nothing to write, and yesterday's figures must read as
+     * yesterday's rather than as today's.
+     */
+    fun readTodayTotals(): TodayTotals {
+        val raw = prefs.getString(KEY_TODAY_TOTALS, null) ?: return TodayTotals()
+        return runCatching { json.decodeFromString(TodayTotals.serializer(), raw) }
+            .getOrDefault(TodayTotals())
+    }
+
+    fun writeTodayTotals(totals: TodayTotals) {
+        prefs.edit()
+            .putString(KEY_TODAY_TOTALS, json.encodeToString(TodayTotals.serializer(), totals))
+            .apply()
+    }
+
     // ---------- timers ----------
 
     fun readTimer(): StoredTimer? {
@@ -223,6 +251,7 @@ class LocalStore(context: Context) {
         const val KEY_NOTES = "notes"
         const val KEY_NOTES_ORDER = "notes-order"
         const val KEY_WIDGET_NOTES = "widget-notes"
+        const val KEY_TODAY_TOTALS = "today-totals"
         const val KEY_TIMER = "timer"
         const val KEY_REST = "rest-started-at"
         const val KEY_REST_END = "rest-end-at"
@@ -259,6 +288,45 @@ data class WidgetNote(
     val list: String = "general",
     val forDate: String? = null,
 )
+
+/**
+ * One project's share of a day, as the widget draws it.
+ *
+ * [name] is the stored name, not a translated one: built-in projects are held
+ * in English so a record means the same thing on every device, and the label is
+ * localized where it is rendered. Freezing a translation into the snapshot
+ * would leave it in whatever language it was written in.
+ */
+@Serializable
+data class WidgetProjectTotal(
+    val id: String,
+    val name: String,
+    /** `#rrggbb`, straight from the project. */
+    val color: String,
+    val minutes: Int,
+)
+
+/**
+ * A day's totals, as of the last time anything changed.
+ *
+ * [dateKey] is the local calendar day these belong to, in `yyyy-MM-dd`. A
+ * reader compares it against today before believing any of it — see
+ * [LocalStore.readTodayTotals].
+ */
+@Serializable
+data class TodayTotals(
+    val dateKey: String = "",
+    val projects: List<WidgetProjectTotal> = emptyList(),
+    /** Completed rests, which is what the stubborn notification counts. */
+    val rests: Int = 0,
+) {
+    /** Total focused minutes, rests included — the widget's header figure. */
+    val minutes: Int get() = projects.sumOf { it.minutes }
+
+    /** Empty rather than stale: the totals only speak for the day they name. */
+    fun forDay(todayKey: String): TodayTotals =
+        if (dateKey == todayKey) this else TodayTotals(dateKey = todayKey)
+}
 
 /**
  * The running timer as written to disk.

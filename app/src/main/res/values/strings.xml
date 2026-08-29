@@ -311,4 +311,21 @@
     <string name="notif_permission_rationale">Allow notifications so the running timer stays visible and tells you when it finishes.</string>
     <string name="notif_permission_allow">Allow</string>
     <string name="notif_permission_later">Not now</string>
+
+    <!-- Time-by-project widget -->
+    <string name="widget_projects_name">Time by project</string>
+    <string name="widget_projects_description">Today\'s focused time, broken down by project.</string>
+    <string name="widget_projects_empty">Nothing recorded today yet.\nStart a session to see it here.</string>
+    <string name="settings_add_projects_widget">Add the time-by-project widget</string>
+
+    <!-- Standing rest count -->
+    <string name="notif_channel_rest_tally">Rest count</string>
+    <string name="notif_channel_rest_tally_desc">A standing note of how many rests you have taken today.</string>
+    <string name="notif_rest_tally_text">Tap to open TimberTimer.</string>
+    <string name="settings_rest_tally">Keep today\'s rest count in the shade</string>
+    <string name="settings_rest_tally_hint">A notification that stays put — it comes back if you swipe it away or clear all. Turn it off here.</string>
+    <plurals name="notif_rest_tally_title">
+        <item quantity="one">%d rest today</item>
+        <item quantity="other">%d rests today</item>
+    </plurals>
 </resources>

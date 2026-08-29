@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The disc that stands for a project in the widget list.
+
+  Drawn white so it can be tinted to any project colour at render time with
+  setColorFilter — RemoteViews cannot build a shape per row, and a per-project
+  drawable would mean one file per palette entry.
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval">
+    <solid android:color="#FFFFFFFF" />
+    <size
+        android:width="10dp"
+        android:height="10dp" />
+</shape>

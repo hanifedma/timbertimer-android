@@ -240,6 +240,50 @@
             android:exported="false"
             android:permission="android.permission.BIND_REMOTEVIEWS" />
 
+        <!--
+          The time-by-project widget: how long today went on each project.
+          Read-only, so unlike the to-do widgets it needs no private action
+          receiver — every tap means the same thing and goes to the activity.
+        -->
+        <receiver
+            android:name=".widget.ProjectTimeWidget"
+            android:exported="true"
+            android:label="@string/widget_projects_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/project_time_widget_info" />
+        </receiver>
+
+        <service
+            android:name=".widget.ProjectTimeWidgetService"
+            android:exported="false"
+            android:permission="android.permission.BIND_REMOTEVIEWS" />
+
+        <!--
+          Midnight, for the two surfaces that cannot infer it: the
+          time-by-project widget and the standing rest count. Both are showing a
+          figure for "today", and the day ends without any record changing to
+          say so.
+
+          Exported, and it has to be: these arrive from the system's own uid, and
+          a receiver closed to other uids is closed to that one too — it would
+          simply never fire. Safe to open, because all three are protected
+          broadcasts, which only the platform is allowed to send; no other app
+          can forge a day change to make this run.
+        -->
+        <receiver
+            android:name=".widget.DayRolloverReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.DATE_CHANGED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+            </intent-filter>
+        </receiver>
+
         <!-- Restores the ongoing notification for a timer that outlived a reboot. -->
         <receiver
             android:name=".timer.BootCompletedReceiver"

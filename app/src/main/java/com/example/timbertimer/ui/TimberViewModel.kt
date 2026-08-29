@@ -871,6 +871,19 @@ class TimberViewModel(
         engine.onBackgroundSyncChanged()
     }
 
+    /**
+     * Turns the standing rest count on or off.
+     *
+     * Only the flag is set here. The collector in
+     * [com.example.timbertimer.AppContainer] is watching it and does the posting
+     * or the clearing, which keeps one place responsible for what is in the
+     * shade — the alternative is two writers racing over the same notification
+     * id, with whichever lost deciding what the user ends up seeing.
+     */
+    fun setRestTally(enabled: Boolean) {
+        settings.setRestTally(enabled)
+    }
+
     /** Auditions the chime at the volume just chosen. */
     fun previewSound() {
         feedback.playPreview()

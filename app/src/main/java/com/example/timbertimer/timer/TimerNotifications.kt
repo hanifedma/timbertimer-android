@@ -136,10 +136,29 @@ class TimerNotifications(context: Context) {
             allowThroughDnd()
         }
 
+        // The standing rest count. LOW, silent, no badge: it is a number to
+        // glance at, and it is posted once a day at most — it should never be
+        // the reason a phone lights up. Its own channel because it is also the
+        // one notification here that does not go away on its own, so anyone who
+        // tires of it can turn it off from the shade without touching the
+        // timer's.
+        val restTally = NotificationChannel(
+            restTallyChannel,
+            context.getString(R.string.notif_channel_rest_tally),
+            NotificationManager.IMPORTANCE_LOW,
+        ).apply {
+            description = context.getString(R.string.notif_channel_rest_tally_desc)
+            setShowBadge(false)
+            enableVibration(false)
+            setSound(null, null)
+            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+        }
+
         // A channel's importance is fixed once created, so raising it needs a new
         // id. Retire the old ones or they linger in the app's notification
         // settings as dead entries the user can still toggle.
-        val live = setOf(runningChannel, doneChannel, idleChannel, restAlarmChannel)
+        val live =
+            setOf(runningChannel, doneChannel, idleChannel, restAlarmChannel, restTallyChannel)
         for (retired in RETIRED_CHANNELS) {
             if (retired !in live) runCatching { service.deleteNotificationChannel(retired) }
         }
@@ -148,7 +167,63 @@ class TimerNotifications(context: Context) {
         service.createNotificationChannel(done)
         service.createNotificationChannel(idle)
         service.createNotificationChannel(restAlarm)
+        service.createNotificationChannel(restTally)
         return moved
+    }
+
+    /**
+     * How many rests today — a number that stays in the shade.
+     *
+     * Deliberately stubborn, which here means three separate things, because no
+     * one of them is enough on its own:
+     *
+     *  - `setOngoing` keeps a swipe from taking it, and keeps "clear all" from
+     *    sweeping it up with everything else.
+     *  - a delete intent puts it straight back if something removes it anyway.
+     *    Ongoing is not absolute: from Android 14 the user can dismiss an
+     *    ongoing notification once the app is not in the foreground, and plenty
+     *    of OEM shades have always had a button that ignores the flag.
+     *  - it is reposted from scratch on every boot and every day roll, so it
+     *    cannot quietly fail to exist after the process is recycled.
+     *
+     * The one thing that does stop it is the switch in Settings, which is what
+     * [SettingsStore.restTally] is for — see the note there. This method is
+     * called only while that is on; [clearRestTally] is what turning it off
+     * calls.
+     *
+     * [count] of zero still posts. "No rests yet today" is the reading someone
+     * checks for at 4pm, and a notification that appeared only after the first
+     * rest would be missing exactly when it had something to say.
+     */
+    fun showRestTally(count: Int) {
+        if (!canPost()) return
+
+        val safe = count.coerceAtLeast(0)
+        val builder = NotificationCompat.Builder(context, restTallyChannel)
+            .setSmallIcon(R.drawable.ic_stat_tree)
+            .setColor(ContextCompat.getColor(context, R.color.timber_accent))
+            // Lands on the records, where the rests it is counting actually are.
+            .setContentIntent(openApp(MainActivity.DESTINATION_RECORDS))
+            .setOngoing(true)
+            // Never auto-cancel: tapping through to the app must not be a way of
+            // getting rid of it, or the first tap would defeat the whole point.
+            .setAutoCancel(false)
+            .setSilent(true)
+            .setOnlyAlertOnce(true)
+            .setShowWhen(false)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setDeleteIntent(restoreTallyIntent())
+            .setContentTitle(
+                context.resources.getQuantityString(R.plurals.notif_rest_tally_title, safe, safe)
+            )
+            .setContentText(context.getString(R.string.notif_rest_tally_text))
+
+        runCatching { manager.notify(ID_REST_TALLY, builder.build()) }
+    }
+
+    fun clearRestTally() {
+        runCatching { manager.cancel(ID_REST_TALLY) }
     }
 
     /**
@@ -733,6 +808,12 @@ class TimerNotifications(context: Context) {
         return PendingIntent.getBroadcast(context, REQUEST_RESTORE, intent, IMMUTABLE)
     }
 
+    private fun restoreTallyIntent(): PendingIntent {
+        val intent = Intent(context, NotificationRestorer::class.java)
+            .setAction(NotificationRestorer.ACTION_RESTORE_TALLY)
+        return PendingIntent.getBroadcast(context, REQUEST_RESTORE_TALLY, intent, IMMUTABLE)
+    }
+
     private fun restoreAlarmIntent(): PendingIntent {
         val intent = Intent(context, NotificationRestorer::class.java)
             .setAction(NotificationRestorer.ACTION_RESTORE_ALARM)
@@ -786,12 +867,14 @@ class TimerNotifications(context: Context) {
     private val doneChannel: String get() = CHANNEL_DONE + generation
     private val idleChannel: String get() = CHANNEL_IDLE + generation
     private val restAlarmChannel: String get() = CHANNEL_REST_ALARM + generation
+    private val restTallyChannel: String get() = CHANNEL_REST_TALLY + generation
 
     companion object {
         const val CHANNEL_RUNNING = "timer-running-v2"
         const val CHANNEL_DONE = "timer-done"
         const val CHANNEL_IDLE = "timer-idle"
         const val CHANNEL_REST_ALARM = "rest-alarm"
+        const val CHANNEL_REST_TALLY = "rest-tally"
 
         /** Marks the channel generation created with Do Not Disturb bypass. */
         private const val DND_SUFFIX = "-dnd"
@@ -808,16 +891,19 @@ class TimerNotifications(context: Context) {
             CHANNEL_DONE,
             CHANNEL_IDLE,
             CHANNEL_REST_ALARM,
+            CHANNEL_REST_TALLY,
             CHANNEL_RUNNING + DND_SUFFIX,
             CHANNEL_DONE + DND_SUFFIX,
             CHANNEL_IDLE + DND_SUFFIX,
             CHANNEL_REST_ALARM + DND_SUFFIX,
+            CHANNEL_REST_TALLY + DND_SUFFIX,
         )
 
         const val ID_RUNNING = 1001
         const val ID_DONE = 1002
         const val ID_IDLE = 1003
         const val ID_REST_ALARM = 1004
+        const val ID_REST_TALLY = 1005
 
         /**
          * Request codes for the delete intents. [REQUEST_RESTORE] is kept at the
@@ -826,6 +912,7 @@ class TimerNotifications(context: Context) {
          */
         private const val REQUEST_RESTORE = 1
         private const val REQUEST_RESTORE_ALARM = 2
+        private const val REQUEST_RESTORE_TALLY = 3
 
         /**
          * The alarm activity is reached two ways and they must stay distinct:

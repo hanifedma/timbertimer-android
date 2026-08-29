@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The time-by-project widget.
+
+  updatePeriodMillis is 0 for the same reason the to-do widgets use it: the app
+  pushes a redraw the moment a record changes, which is both fresher and cheaper
+  than the shortest poll the platform allows (30 minutes). Midnight, which
+  nothing in the data announces, is covered by DayRolloverReceiver.
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="180dp"
+    android:minHeight="110dp"
+    android:minResizeWidth="110dp"
+    android:minResizeHeight="70dp"
+    android:targetCellWidth="3"
+    android:targetCellHeight="3"
+    android:updatePeriodMillis="0"
+    android:initialLayout="@layout/widget_project_time"
+    android:previewLayout="@layout/widget_project_time"
+    android:resizeMode="horizontal|vertical"
+    android:widgetCategory="home_screen"
+    android:description="@string/widget_projects_description" />

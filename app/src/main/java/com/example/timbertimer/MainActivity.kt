@@ -43,6 +43,7 @@ import com.example.timbertimer.data.remote.SupabaseConfig
 import com.example.timbertimer.ui.TimberApp
 import com.example.timbertimer.ui.TimberViewModel
 import com.example.timbertimer.ui.theme.TimberTimerTheme
+import com.example.timbertimer.widget.ProjectTimeWidget
 import com.example.timbertimer.widget.TodayTodoWidget
 import com.example.timbertimer.widget.TodoWidget
 
@@ -120,6 +121,7 @@ class MainActivity : ComponentActivity() {
                     onSignInWithBrowser = ::signInWithBrowser,
                     onAddWidget = { requestPinWidget(TodoWidget::class.java) },
                     onAddTodayWidget = { requestPinWidget(TodayTodoWidget::class.java) },
+                    onAddProjectsWidget = { requestPinWidget(ProjectTimeWidget::class.java) },
                     onIgnoreBatteryOptimisation = ::requestIgnoreBatteryOptimisation,
                     onAllowDoNotDisturb = ::requestDoNotDisturbAccess,
                     onAllowFullScreen = ::requestFullScreenAlerts,
@@ -173,6 +175,10 @@ class MainActivity : ComponentActivity() {
         // takes whatever was posted on it down with it, hence the repost.
         val container = (application as TimberApplication).container
         if (container.notifications.ensureChannels()) container.timerEngine.onWatchdogTick()
+        // The rest count is posted from a snapshot, so this is cheap, and it is
+        // the moment that matters: permission may have just been granted, or a
+        // channel rebuild may have taken the old notification down with it.
+        container.refreshRestTally()
         viewModel.onResume()
     }
 
@@ -316,6 +322,9 @@ class MainActivity : ComponentActivity() {
 
         /** Where "Start focusing" lands, so the invitation opens on the form. */
         const val DESTINATION_FOCUS = "focus"
+
+        /** Where the time-by-project widget lands: the day it is summarising. */
+        const val DESTINATION_RECORDS = "records"
     }
 
     /**

@@ -116,6 +116,7 @@ fun TimberApp(
     onSignInWithBrowser: () -> Unit,
     onAddWidget: () -> Unit,
     onAddTodayWidget: () -> Unit,
+    onAddProjectsWidget: () -> Unit,
     onIgnoreBatteryOptimisation: () -> Unit,
     onAllowDoNotDisturb: () -> Unit,
     onAllowFullScreen: () -> Unit,
@@ -153,6 +154,7 @@ fun TimberApp(
     val vibrate by viewModel.settings.vibrate.collectAsStateWithLifecycle()
     val idleReminder by viewModel.settings.idleReminder.collectAsStateWithLifecycle()
     val backgroundSync by viewModel.settings.backgroundSync.collectAsStateWithLifecycle()
+    val restTally by viewModel.settings.restTally.collectAsStateWithLifecycle()
     val restAlert by viewModel.settings.restAlert.collectAsStateWithLifecycle()
 
     // Midnight rolling past is what makes the Today list "new and blank"
@@ -165,6 +167,7 @@ fun TimberApp(
         when (requestedDestination) {
             MainActivity.DESTINATION_TASKS -> destination = Destination.TASKS
             MainActivity.DESTINATION_FOCUS -> destination = Destination.FOCUS
+            MainActivity.DESTINATION_RECORDS -> destination = Destination.RECORDS
             else -> return@LaunchedEffect
         }
         viewModel.consumeDestination()
@@ -382,6 +385,7 @@ fun TimberApp(
                                 vibrate = vibrate,
                                 idleReminder = idleReminder,
                                 backgroundSync = backgroundSync,
+                                restTally = restTally,
                                 restAlert = restAlert,
                                 onThemeChange = viewModel.settings::setThemeMode,
                                 onLanguageChange = onLanguageChange,
@@ -391,12 +395,14 @@ fun TimberApp(
                                 onVibrateChange = viewModel.settings::setVibrate,
                                 onIdleReminderChange = viewModel::setIdleReminder,
                                 onBackgroundSyncChange = viewModel::setBackgroundSync,
+                                onRestTallyChange = viewModel::setRestTally,
                                 onRestAlertChange = viewModel::setRestAlert,
                                 onIgnoreBatteryOptimisation = onIgnoreBatteryOptimisation,
                                 onAllowDoNotDisturb = onAllowDoNotDisturb,
                                 onAllowFullScreen = onAllowFullScreen,
                                 onAddWidget = onAddWidget,
                                 onAddTodayWidget = onAddTodayWidget,
+                                onAddProjectsWidget = onAddProjectsWidget,
                                 onManageProjects = { managingProjects = true },
                                 projectsSyncBlocked = projectsSyncBlocked,
                                 onSignIn = onSignIn,

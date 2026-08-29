@@ -3,10 +3,12 @@ package com.example.timbertimer
 import android.app.Application
 import android.content.Context
 import com.example.timbertimer.core.Time
+import com.example.timbertimer.core.todayTotals
 import com.example.timbertimer.data.TimberRepository
 import com.example.timbertimer.data.local.LocalStore
 import com.example.timbertimer.data.local.SettingsStore
 import com.example.timbertimer.data.local.WidgetNote
+import com.example.timbertimer.data.local.TodayTotals
 import com.example.timbertimer.data.remote.GoogleSignIn
 import com.example.timbertimer.data.remote.RealtimeClient
 import com.example.timbertimer.data.remote.SupabaseApi
@@ -18,11 +20,13 @@ import com.example.timbertimer.timer.TimerFeedback
 import com.example.timbertimer.timer.TimerNotifications
 import com.example.timbertimer.widget.TodayTodoWidget
 import com.example.timbertimer.widget.TodoWidget
+import com.example.timbertimer.widget.ProjectTimeWidget
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 
@@ -150,5 +154,53 @@ class AppContainer(private val context: Context) {
                     TodayTodoWidget.refresh(context)
                 }
         }
+
+        // Today's per-project totals, feeding the time-by-project widget and the
+        // standing rest count.
+        //
+        // The day is folded in as its own already-deduplicated flow rather than
+        // by combining the raw clock: the clock ticks every second, and both
+        // recomputing the totals and comparing a long record list that often
+        // would be paid over and over for an answer that changes once a day.
+        // This way the combine only fires when a record changes, a project is
+        // renamed or recoloured, the switch is flipped, or midnight passes.
+        scope.launch {
+            val dayKey = timerEngine.now
+                .map { Time.localDateKey(it) }
+                .distinctUntilChanged()
+
+            combine(
+                repository.records,
+                repository.projects,
+                settings.restTally,
+                dayKey,
+            ) { records, projects, tallyWanted, today ->
+                Triple(todayTotals(records, projects, today), tallyWanted, today)
+            }
+                .distinctUntilChanged()
+                .collect { (totals, tallyWanted, _) ->
+                    local.writeTodayTotals(totals)
+                    ProjectTimeWidget.refresh(context)
+                    if (tallyWanted) notifications.showRestTally(totals.rests)
+                    else notifications.clearRestTally()
+                }
+        }
+    }
+
+    /**
+     * Puts the standing rest count back in the shade, from the stored snapshot.
+     *
+     * Called when the app comes to the front, because the collector above may
+     * have tried to post at a moment when it could not: notification permission
+     * is asked for after the process starts, and a channel rebuilt for Do Not
+     * Disturb takes everything posted on the old one down with it. Neither
+     * changes any record, so nothing would make the collector fire again — the
+     * count would simply be missing until the next session ended.
+     */
+    fun refreshRestTally() {
+        val today = Time.localDateKey(System.currentTimeMillis())
+        val totals = local.readTodayTotals().forDay(today)
+        if (settings.restTally.value) notifications.showRestTally(totals.rests)
+        else notifications.clearRestTally()
     }
 }

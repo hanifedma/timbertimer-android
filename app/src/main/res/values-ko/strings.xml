@@ -306,4 +306,20 @@
     <string name="notif_permission_rationale">알림을 허용하면 실행 중인 타이머가 계속 보이고, 끝날 때 알려드려요.</string>
     <string name="notif_permission_allow">허용</string>
     <string name="notif_permission_later">나중에</string>
+
+    <!-- 프로젝트별 시간 위젯 -->
+    <string name="widget_projects_name">프로젝트별 시간</string>
+    <string name="widget_projects_description">오늘 집중한 시간을 프로젝트별로 보여줘요.</string>
+    <string name="widget_projects_empty">오늘 기록이 아직 없어요.\n세션을 시작하면 여기에 표시돼요.</string>
+    <string name="settings_add_projects_widget">프로젝트별 시간 위젯 추가</string>
+
+    <!-- 오늘의 휴식 횟수 -->
+    <string name="notif_channel_rest_tally">휴식 횟수</string>
+    <string name="notif_channel_rest_tally_desc">오늘 휴식을 몇 번 했는지 항상 알려주는 알림이에요.</string>
+    <string name="notif_rest_tally_text">탭하면 TimberTimer가 열려요.</string>
+    <string name="settings_rest_tally">오늘의 휴식 횟수를 알림에 계속 표시</string>
+    <string name="settings_rest_tally_hint">밀어서 지우거나 전체 삭제해도 다시 나타나는 알림이에요. 여기서 끌 수 있어요.</string>
+    <plurals name="notif_rest_tally_title">
+        <item quantity="other">오늘 휴식 %d번</item>
+    </plurals>
 </resources>

@@ -132,6 +132,26 @@ class SettingsStore(context: Context) {
         _backgroundSync.value = enabled
     }
 
+    /**
+     * The standing count of today's rests, kept in the shade.
+     *
+     * It is deliberately hard to get rid of: ongoing, and put straight back if
+     * something removes it anyway — the point is a number that is simply always
+     * there, not one that survives until the next time the shade is swept.
+     *
+     * Which is exactly why it needs a switch. A notification that cannot be
+     * dismissed and has no off switch is not a feature, it is something wrong
+     * with the phone; this is the off switch, and it is the only thing that
+     * stops the notification coming back.
+     */
+    private val _restTally = MutableStateFlow(prefs.getBoolean(KEY_REST_TALLY, true))
+    val restTally: StateFlow<Boolean> = _restTally.asStateFlow()
+
+    fun setRestTally(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_REST_TALLY, enabled).apply()
+        _restTally.value = enabled
+    }
+
     // ---------- timer defaults ----------
 
     private val _timerMode = MutableStateFlow(TimerMode.from(prefs.getString(KEY_TIMER_MODE, null)))
@@ -302,6 +322,7 @@ class SettingsStore(context: Context) {
         private const val KEY_VIBRATE = "vibrate"
         private const val KEY_IDLE_REMINDER = "idle-reminder"
         private const val KEY_BACKGROUND_SYNC = "background-sync"
+        private const val KEY_REST_TALLY = "rest-tally-notification"
         private const val KEY_TIMER_MODE = "timer-mode"
         private const val KEY_DURATION = "duration"
         private const val KEY_REST_MODE = "rest-mode"

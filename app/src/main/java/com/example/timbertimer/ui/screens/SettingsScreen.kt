@@ -47,6 +47,7 @@ fun SettingsScreen(
     vibrate: Boolean,
     idleReminder: Boolean,
     backgroundSync: Boolean,
+    restTally: Boolean,
     restAlert: RestAlertStyle,
     onThemeChange: (ThemeMode) -> Unit,
     onLanguageChange: (String) -> Unit,
@@ -56,12 +57,14 @@ fun SettingsScreen(
     onVibrateChange: (Boolean) -> Unit,
     onIdleReminderChange: (Boolean) -> Unit,
     onBackgroundSyncChange: (Boolean) -> Unit,
+    onRestTallyChange: (Boolean) -> Unit,
     onRestAlertChange: (RestAlertStyle) -> Unit,
     onIgnoreBatteryOptimisation: () -> Unit,
     onAllowDoNotDisturb: () -> Unit,
     onAllowFullScreen: () -> Unit,
     onAddWidget: () -> Unit,
     onAddTodayWidget: () -> Unit,
+    onAddProjectsWidget: () -> Unit,
     onManageProjects: () -> Unit,
     projectsSyncBlocked: Boolean,
     onSignIn: () -> Unit,
@@ -353,6 +356,41 @@ fun SettingsScreen(
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 8.dp),
+            )
+
+            Spacer(Modifier.height(12.dp))
+
+            OutlinedButton(onClick = onAddProjectsWidget, modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    stringResource(R.string.settings_add_projects_widget),
+                    textAlign = TextAlign.Center,
+                )
+            }
+            Text(
+                text = stringResource(R.string.widget_projects_description),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+        }
+
+        Panel(kicker = stringResource(R.string.notif_channel_rest_tally)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = stringResource(R.string.settings_rest_tally),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(1f),
+                )
+                Switch(checked = restTally, onCheckedChange = onRestTallyChange)
+            }
+            // Says out loud that the notification is meant to be hard to get rid
+            // of, and that this switch is the way. Someone who finds an
+            // unswipeable notification and no explanation assumes a bug.
+            Text(
+                text = stringResource(R.string.settings_rest_tally_hint),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
 
