@@ -76,7 +76,7 @@ class CalendarLayoutTest {
     }
 
     @Test
-    fun `a session across midnight shows in both days and can be dragged in neither`() {
+    fun `a session across midnight shows in both days, each keeping its own real edge`() {
         val segments = buildSegments(
             // 23:00 to 01:00 the next morning.
             records = listOf(record("night", at(today, 23), 120)),
@@ -96,8 +96,17 @@ class CalendarLayoutTest {
         assertEquals(60f, segments[1].endMin, 0.01f)
         assertEquals(60, segments[1].minutes)
 
-        // Neither half is a whole block, so neither offers a drag.
+        // Neither half is a whole block, so neither can be moved as one...
         assertTrue(segments.all { it.partial })
+
+        // ...but between them they still hold both of the record's real ends,
+        // and each is editable from the day it falls on. The first half owns the
+        // start and is cut at midnight; the second is cut at midnight and owns
+        // the end.
+        assertFalse(segments[0].clippedStart)
+        assertTrue(segments[0].clippedEnd)
+        assertTrue(segments[1].clippedStart)
+        assertFalse(segments[1].clippedEnd)
     }
 
     @Test

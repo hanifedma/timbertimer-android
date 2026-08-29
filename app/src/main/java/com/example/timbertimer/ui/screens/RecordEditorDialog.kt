@@ -100,12 +100,22 @@ fun RecordEditorDialog(
                     millis = editor.startedAt,
                     locale = locale,
                     clock = clock,
-                    onChange = { started ->
-                        // Moving the start carries the whole record with it, which
-                        // is what "it actually began an hour later" means.
-                        val span = editor.endedAt - editor.startedAt
-                        onChange(editor.copy(startedAt = started, endedAt = started + span))
-                    },
+                    // Now that the start can be moved on its own, it is a field
+                    // that can put the record out of order — so it says so too,
+                    // rather than leaving the end looking like the only culprit.
+                    isError = editor.endsBeforeStart || editor.tooLong,
+                    // Sets the start, and only the start.
+                    //
+                    // This used to carry the end along to preserve the length,
+                    // on the reading that a corrected start means "it actually
+                    // began an hour later". But the dialog shows both ends and a
+                    // duration underneath, so the end field silently moving is
+                    // an edit the user did not make and cannot see the reason
+                    // for — and it makes the obvious way to fix a start time
+                    // that ran long impossible: correcting the start would push
+                    // the end out by exactly as much. The web app has always
+                    // behaved this way; this brings the phone into line.
+                    onChange = { started -> onChange(editor.copy(startedAt = started)) },
                 )
 
                 InstantField(

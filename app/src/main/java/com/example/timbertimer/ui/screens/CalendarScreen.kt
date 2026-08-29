@@ -304,7 +304,15 @@ fun CalendarScreen(
                         HourGutter(hourHeight = hourHeight, clock = clock)
 
                         placed.forEach { block ->
-                            if (drag?.record != null && drag?.record?.id == block.segment.record?.id) return@forEach
+                            // Hide only the piece the drag is actually replacing.
+                            // A record split over midnight has one on each day,
+                            // and resizing the end does not move the start's
+                            // half — blanking it too would make the other day
+                            // look emptied for the length of the gesture.
+                            if (drag?.record != null &&
+                                drag?.record?.id == block.segment.record?.id &&
+                                drag?.dayIndex == block.segment.dayIndex
+                            ) return@forEach
                             CalendarBlock(
                                 block = block,
                                 book = book,
@@ -587,10 +595,19 @@ private fun CalendarBlock(
         // The edges are only draggable once there is room for two grab zones and
         // a body between them, so the handles appear exactly when they work —
         // otherwise the block would be advertising something it cannot do.
-        if (segment.record != null && !segment.running && !segment.partial &&
-            heightDp >= EDGE_GRAB_MIN_HEIGHT
-        ) {
-            listOf(Alignment.TopCenter, Alignment.BottomCenter).forEach { edge ->
+        //
+        // Each end is judged on its own. A session that ran past midnight is cut
+        // into two blocks, and it used to be that neither showed a handle at
+        // all: the piece was "partial", so both its edges were treated as
+        // scenery. But only one edge of each piece is the calendar's cut — the
+        // other is the real start, or the real end, and there was never a reason
+        // it could not be dragged. Now the midnight side stays plain and the
+        // true side gets its grip.
+        if (segment.record != null && !segment.running && heightDp >= EDGE_GRAB_MIN_HEIGHT) {
+            buildList {
+                if (!segment.clippedStart) add(Alignment.TopCenter)
+                if (!segment.clippedEnd) add(Alignment.BottomCenter)
+            }.forEach { edge ->
                 Box(
                     modifier = Modifier
                         .align(edge)
@@ -779,9 +796,8 @@ private fun startDrag(
     }
 
     val segment = hit.segment
-    // Neither the timer that is still running nor one piece of a record that
-    // crosses midnight is a whole block, so neither can be dragged.
-    if (segment.running || segment.partial || segment.record == null) return null
+    // A timer that is still running has no end to drag yet.
+    if (segment.running || segment.record == null) return null
 
     val record = segment.record
     val start = record.startedAt
@@ -790,8 +806,16 @@ private fun startDrag(
     val canResize = hit.heightPx >= edgeMinHeightPx
 
     val mode = when {
-        canResize && fromTop <= edgeGrabPx -> DragMode.RESIZE_START
-        canResize && fromTop >= hit.heightPx - edgeGrabPx -> DragMode.RESIZE_END
+        // Only an edge this piece actually owns. On the far side of a midnight
+        // split the boundary is the calendar's, and dragging it would mean
+        // dragging a line the record does not have.
+        canResize && fromTop <= edgeGrabPx && !segment.clippedStart -> DragMode.RESIZE_START
+        canResize && fromTop >= hit.heightPx - edgeGrabPx && !segment.clippedEnd ->
+            DragMode.RESIZE_END
+        // Moving needs the whole record under the finger, and half of one that
+        // crosses midnight is not it — the other half is on another day, and
+        // MOVE below keeps a record inside a single one.
+        segment.partial -> return null
         else -> DragMode.MOVE
     }
 

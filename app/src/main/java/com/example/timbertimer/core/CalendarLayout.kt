@@ -28,11 +28,27 @@ data class CalendarSegment(
     val startMin: Float,
     val endMin: Float,
     val minutes: Int,
-    /** True for the piece of a record that runs past midnight into this day. */
-    val partial: Boolean,
+    /**
+     * True when this piece begins at midnight because the record began on an
+     * earlier day — so the top edge drawn here is the calendar's own boundary,
+     * not the moment the session started.
+     */
+    val clippedStart: Boolean,
+    /** The same at the other end: the record runs on past this midnight. */
+    val clippedEnd: Boolean,
     val column: Int,
     val columns: Int,
-)
+) {
+    /**
+     * True for a piece that is missing at least one of its real ends.
+     *
+     * Worth keeping as a name of its own because it answers "can this block be
+     * moved as a whole?", which is a different question from "is this edge
+     * real?" — a record across midnight has two genuine ends, they just live on
+     * different days, and each of them is editable from the day it falls on.
+     */
+    val partial: Boolean get() = clippedStart || clippedEnd
+}
 
 /**
  * Splits every record into per-day pieces — a session across midnight shows in
@@ -110,7 +126,8 @@ fun buildSegments(
                 // Very short records still need a tappable block.
                 endMin = minOf(1440f, maxOf(rawEndMin, startMin + CALENDAR_MIN_MINUTES)),
                 minutes = (((minOf(entry.end, dayEnd) - from) / 60_000f).roundToInt()).coerceAtLeast(0),
-                partial = entry.start < dayStart || entry.end > dayEnd,
+                clippedStart = entry.start < dayStart,
+                clippedEnd = entry.end > dayEnd,
                 column = 0,
                 columns = 1,
             )
