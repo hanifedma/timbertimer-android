@@ -81,7 +81,7 @@ class NotificationRestorer : BroadcastReceiver() {
                 if (!container.settings.restTally.value) return
                 val today = Time.localDateKey(System.currentTimeMillis())
                 val totals = LocalStore(context).readTodayTotals().forDay(today)
-                container.notifications.showRestTally(totals.rests)
+                container.notifications.showRestTally(totals.rests, totals.restMinutes)
             }
         }
     }

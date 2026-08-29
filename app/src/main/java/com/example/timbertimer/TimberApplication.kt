@@ -181,7 +181,7 @@ class AppContainer(private val context: Context) {
                 .collect { (totals, tallyWanted, _) ->
                     local.writeTodayTotals(totals)
                     ProjectTimeWidget.refresh(context)
-                    if (tallyWanted) notifications.showRestTally(totals.rests)
+                    if (tallyWanted) notifications.showRestTally(totals.rests, totals.restMinutes)
                     else notifications.clearRestTally()
                 }
         }
@@ -200,7 +200,7 @@ class AppContainer(private val context: Context) {
     fun refreshRestTally() {
         val today = Time.localDateKey(System.currentTimeMillis())
         val totals = local.readTodayTotals().forDay(today)
-        if (settings.restTally.value) notifications.showRestTally(totals.rests)
+        if (settings.restTally.value) notifications.showRestTally(totals.rests, totals.restMinutes)
         else notifications.clearRestTally()
     }
 }

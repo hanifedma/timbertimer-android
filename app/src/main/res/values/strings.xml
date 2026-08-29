@@ -321,7 +321,8 @@
     <!-- Standing rest count -->
     <string name="notif_channel_rest_tally">Rest count</string>
     <string name="notif_channel_rest_tally_desc">A standing note of how many rests you have taken today.</string>
-    <string name="notif_rest_tally_text">Tap to open TimberTimer.</string>
+    <string name="notif_rest_tally_text">%1$s of rest altogether.</string>
+    <string name="notif_rest_tally_none">Tap to open TimberTimer.</string>
     <string name="settings_rest_tally">Keep today\'s rest count in the shade</string>
     <string name="settings_rest_tally_hint">A notification that stays put — it comes back if you swipe it away or clear all. Turn it off here.</string>
     <plurals name="notif_rest_tally_title">

@@ -168,6 +168,6 @@ class DayRolloverReceiver : android.content.BroadcastReceiver() {
         if (!app.container.settings.restTally.value) return
         val today = Time.localDateKey(System.currentTimeMillis())
         val totals = LocalStore(context).readTodayTotals().forDay(today)
-        app.container.notifications.showRestTally(totals.rests)
+        app.container.notifications.showRestTally(totals.rests, totals.restMinutes)
     }
 }

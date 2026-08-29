@@ -112,6 +112,28 @@ class DayTotalsTest {
         assertEquals(3, totals.rests)
         val rest = totals.projects.single { it.id == Projects.REST_ID }
         assertEquals(20, rest.minutes)
+
+        // The notification says both numbers, and they answer different
+        // questions: three short breaks and one long afternoon are both "3
+        // rests" until the time is said out loud.
+        assertEquals(20, totals.restMinutes)
+        // Focus is not rest, however much of it there was.
+        assertEquals(70, totals.minutes)
+    }
+
+    @Test
+    fun `a day with focus but no rest reports no rest time`() {
+        val totals = todayTotals(
+            records = listOf(record("a", at(today, 9), 45)),
+            projects = book,
+            today = todayKey,
+        )
+
+        // Zero rather than the focus figure, and zero rather than a crash on a
+        // Rest row that is simply not there.
+        assertEquals(0, totals.rests)
+        assertEquals(0, totals.restMinutes)
+        assertEquals(45, totals.minutes)
     }
 
     @Test

@@ -194,11 +194,20 @@ class TimerNotifications(context: Context) {
      * [count] of zero still posts. "No rests yet today" is the reading someone
      * checks for at 4pm, and a notification that appeared only after the first
      * rest would be missing exactly when it had something to say.
+     *
+     * [minutes] is how long those rests ran altogether, which is a different
+     * question from how many there were — four five-minute breaks and one long
+     * afternoon are both "4 rests" until the time is said out loud.
      */
-    fun showRestTally(count: Int) {
+    fun showRestTally(count: Int, minutes: Int) {
         if (!canPost()) return
 
         val safe = count.coerceAtLeast(0)
+        val spent = Time.formatMinutes(
+            minutes,
+            context.getString(R.string.unit_m),
+            context.getString(R.string.unit_h),
+        )
         val builder = NotificationCompat.Builder(context, restTallyChannel)
             .setSmallIcon(R.drawable.ic_stat_tree)
             .setColor(ContextCompat.getColor(context, R.color.timber_accent))
@@ -217,7 +226,13 @@ class TimerNotifications(context: Context) {
             .setContentTitle(
                 context.resources.getQuantityString(R.plurals.notif_rest_tally_title, safe, safe)
             )
-            .setContentText(context.getString(R.string.notif_rest_tally_text))
+            // At zero the duration would only repeat the title back — "0 rests
+            // today" over "0m of rest altogether" — so the line does something
+            // useful instead and says what a tap will do.
+            .setContentText(
+                if (safe == 0) context.getString(R.string.notif_rest_tally_none)
+                else context.getString(R.string.notif_rest_tally_text, spent)
+            )
 
         runCatching { manager.notify(ID_REST_TALLY, builder.build()) }
     }

@@ -1,6 +1,7 @@
 package com.example.timbertimer.data.local
 
 import android.content.Context
+import com.example.timbertimer.data.model.Projects
 import com.example.timbertimer.data.remote.FocusSessionRow
 import com.example.timbertimer.data.remote.NoteRow
 import com.example.timbertimer.data.remote.ProjectRow
@@ -322,6 +323,17 @@ data class TodayTotals(
 ) {
     /** Total focused minutes, rests included — the widget's header figure. */
     val minutes: Int get() = projects.sumOf { it.minutes }
+
+    /**
+     * How long today's rests ran, all together.
+     *
+     * Rest keeps a project row like any other, so this is simply that row's
+     * total — a separate figure from [rests], which counts how many there were.
+     * Zero when none have been taken, which is also what a day with no Rest row
+     * at all should read as.
+     */
+    val restMinutes: Int
+        get() = projects.firstOrNull { it.id == Projects.REST_ID }?.minutes ?: 0
 
     /** Empty rather than stale: the totals only speak for the day they name. */
     fun forDay(todayKey: String): TodayTotals =
