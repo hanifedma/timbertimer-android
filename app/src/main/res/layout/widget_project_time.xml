@@ -56,30 +56,51 @@
         android:background="@color/widget_divider"
         android:contentDescription="@null" />
 
-    <FrameLayout
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1">
+        android:layout_weight="1"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
 
-        <ListView
-            android:id="@+id/widget_list"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:divider="@null"
-            android:dividerHeight="0dp"
-            android:scrollbars="none"
-            android:clipToPadding="false"
-            android:paddingTop="2dp"
-            android:paddingBottom="2dp" />
+        <!--
+          The ring. Hidden rather than shrunk on a widget too narrow to carry
+          both it and a readable list — see ProjectTimeWidget.render. Its bitmap
+          is painted at runtime, so the src here is only what the preview shows.
+        -->
+        <ImageView
+            android:id="@+id/widget_chart"
+            android:layout_width="64dp"
+            android:layout_height="64dp"
+            android:layout_marginStart="2dp"
+            android:layout_marginEnd="10dp"
+            android:visibility="gone" />
 
-        <TextView
-            android:id="@+id/widget_empty"
-            android:layout_width="match_parent"
+        <FrameLayout
+            android:layout_width="0dp"
             android:layout_height="match_parent"
-            android:gravity="center"
-            android:padding="12dp"
-            android:text="@string/widget_projects_empty"
-            android:textColor="@color/widget_muted"
-            android:textSize="14sp" />
-    </FrameLayout>
+            android:layout_weight="1">
+
+            <ListView
+                android:id="@+id/widget_list"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:divider="@null"
+                android:dividerHeight="0dp"
+                android:scrollbars="none"
+                android:clipToPadding="false"
+                android:paddingTop="2dp"
+                android:paddingBottom="2dp" />
+
+            <TextView
+                android:id="@+id/widget_empty"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:gravity="center"
+                android:padding="12dp"
+                android:text="@string/widget_projects_empty"
+                android:textColor="@color/widget_muted"
+                android:textSize="14sp" />
+        </FrameLayout>
+    </LinearLayout>
 </LinearLayout>

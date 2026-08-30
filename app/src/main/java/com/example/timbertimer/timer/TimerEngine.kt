@@ -749,8 +749,22 @@ class TimerEngine(
     // ---------- state plumbing ----------
 
     private fun applyTimer(timer: ActiveTimer?) {
+        val ended = timer == null && _timer.value != null
         _timer.value = timer
         local.writeTimer(timer?.toStored())
+
+        // A focus session that ends has always been recorded — by this device,
+        // or by another one that claimed it first; there is no path that throws
+        // a focus session away. So the name it ran under has done its job, and
+        // keeping it would make the next session start by deleting the last
+        // one's name before typing a new one.
+        //
+        // Cleared here rather than in complete() because completion is only
+        // three of the four ways a timer ends; the other is finding the shared
+        // row already gone, and a session finished on the laptop should leave
+        // this phone's field just as empty.
+        if (ended) settings.setSessionName("")
+
         if (timer != null && timer.mode == TimerMode.COUNTDOWN) {
             alarms.schedule(timer.endAt)
         } else {

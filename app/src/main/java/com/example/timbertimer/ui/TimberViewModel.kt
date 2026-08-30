@@ -227,8 +227,19 @@ class TimberViewModel(
         // A timer adopted from another device names the session, and brings its
         // project (and therefore its tree) with it.
         viewModelScope.launch {
+            var wasRunning = false
             engine.timer.collect { running ->
-                if (running == null) return@collect
+                if (running == null) {
+                    // The session just ended, and ending means it was recorded
+                    // — see applyTimer. Empty the field so the next task starts
+                    // on a clean one instead of the last task's name, which the
+                    // user would have to delete first. The stored name is
+                    // cleared alongside it, so this survives a restart.
+                    if (wasRunning) _form.value = _form.value.copy(title = "")
+                    wasRunning = false
+                    return@collect
+                }
+                wasRunning = true
                 formSeeded = true
                 _form.value = _form.value.copy(
                     title = running.title,

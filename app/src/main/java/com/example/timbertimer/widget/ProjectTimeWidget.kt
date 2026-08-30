@@ -7,6 +7,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.view.View
 import android.widget.RemoteViews
 import com.example.timbertimer.MainActivity
 import com.example.timbertimer.R
@@ -38,6 +39,23 @@ class ProjectTimeWidget : AppWidgetProvider() {
         appWidgetIds.forEach { id -> render(context, appWidgetManager, id) }
     }
 
+    /**
+     * Resizing changes whether the ring fits, and nothing else would notice.
+     *
+     * Without this a widget dragged wider keeps the list-only layout it was
+     * given when it was narrow, until some unrelated change happens to redraw
+     * it — which reads as the ring being broken rather than absent by design.
+     */
+    override fun onAppWidgetOptionsChanged(
+        context: Context,
+        appWidgetManager: AppWidgetManager,
+        appWidgetId: Int,
+        newOptions: android.os.Bundle?,
+    ) {
+        super.onAppWidgetOptionsChanged(context, appWidgetManager, appWidgetId, newOptions)
+        render(context, appWidgetManager, appWidgetId)
+    }
+
     companion object {
 
         /** Redraws every placed widget: the header total and the list itself. */
@@ -48,8 +66,11 @@ class ProjectTimeWidget : AppWidgetProvider() {
             }.getOrNull() ?: return
             if (ids.isEmpty()) return
 
-            manager.notifyAppWidgetViewDataChanged(ids, R.id.widget_list)
+            // Push the views first, then ask for the reload — see the note on
+            // TodayTodoWidget.refresh. Asking first lets the push discard the
+            // request, which leaves the list showing rows it already had.
             ids.forEach { id -> render(context, manager, id) }
+            manager.notifyAppWidgetViewDataChanged(ids, R.id.widget_list)
         }
 
         private fun render(context: Context, manager: AppWidgetManager, widgetId: Int) {
@@ -69,6 +90,32 @@ class ProjectTimeWidget : AppWidgetProvider() {
                 }
                 setRemoteAdapter(R.id.widget_list, adapterIntent)
                 setEmptyView(R.id.widget_list, R.id.widget_empty)
+
+                // The ring, and the decision not to draw one.
+                //
+                // Two separate reasons it may be absent, and both have to be
+                // handled or the widget lies: there is nothing to chart yet, or
+                // this widget is too narrow to hold a ring and a legible list
+                // side by side. On a 2-cell home screen the list is the part
+                // worth keeping — a ring with no labels beside it says which
+                // project won and nothing else.
+                val chart =
+                    if (widthDp(manager, widgetId) >= CHART_MIN_WIDTH_DP) {
+                        ProjectTimeChart.render(context, totals, CHART_SIZE_DP)
+                    } else null
+
+                if (chart == null) {
+                    setViewVisibility(R.id.widget_chart, View.GONE)
+                } else {
+                    setViewVisibility(R.id.widget_chart, View.VISIBLE)
+                    setImageViewBitmap(R.id.widget_chart, chart)
+                    // The ring carries real information, so it is not
+                    // decoration and cannot be left unlabelled.
+                    setContentDescription(
+                        R.id.widget_chart,
+                        ProjectTimeChart.describe(context, totals),
+                    )
+                }
 
                 // A collection swallows taps on its rows unless a template is
                 // set, so one is set even though every row means the same
@@ -118,6 +165,31 @@ class ProjectTimeWidget : AppWidgetProvider() {
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP),
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )
+
+        /**
+         * How wide the host says this widget currently is, in dp.
+         *
+         * Falls back to a width that keeps the ring when the host will not say
+         * — some launchers report nothing until the first resize, and the
+         * common case is a widget placed at its default size, which is wide
+         * enough. Better to show the ring and have it disappear on a shrink
+         * than to hide it on every launcher that stays quiet.
+         */
+        private fun widthDp(manager: AppWidgetManager, widgetId: Int): Int {
+            val options = runCatching { manager.getAppWidgetOptions(widgetId) }.getOrNull()
+                ?: return CHART_MIN_WIDTH_DP
+            val min = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 0)
+            return if (min > 0) min else CHART_MIN_WIDTH_DP
+        }
+
+        /** Matches the ImageView in widget_project_time.xml. */
+        private const val CHART_SIZE_DP = 64
+
+        /**
+         * Below this the ring and the list start fighting for the same room.
+         * The widget's own minResizeWidth is 110dp, so this is reachable.
+         */
+        private const val CHART_MIN_WIDTH_DP = 180
 
         // Distinct from the to-do widgets': two PendingIntents that differ only
         // by request code but not by extras can otherwise collide.

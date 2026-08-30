@@ -216,14 +216,30 @@ class SettingsStore(context: Context) {
     private val _sessionName = MutableStateFlow(prefs.getString(KEY_SESSION_NAME, null).orEmpty())
     val sessionName: StateFlow<String> = _sessionName.asStateFlow()
 
+    /**
+     * Blank is a real value here, not a missing one.
+     *
+     * It used to be replaced with the default title, which meant the field
+     * could never be left empty: clearing it typed "Focus" back in, and a
+     * finished session had no way to hand the next one a clean slate. A blank
+     * name costs nothing downstream — a record falls back to its project's name
+     * (see TimerEngine.complete), which is what Start already did.
+     */
     fun setSessionName(name: String) {
-        val safe = name.trim().take(Limits.TITLE_MAX).ifBlank { Limits.DEFAULT_TITLE }
+        val safe = name.trim().take(Limits.TITLE_MAX)
         prefs.edit().putString(KEY_SESSION_NAME, safe).apply()
         _sessionName.value = safe
     }
 
-    /** True until the user has focused once, so startup can seed the name from history. */
-    fun hasSessionName(): Boolean = !prefs.getString(KEY_SESSION_NAME, null).isNullOrBlank()
+    /**
+     * True once the user has named a session at all, so startup seeds the field
+     * from history only for someone who never has.
+     *
+     * Presence, not content: an empty name is an answer — the last session
+     * finished and cleared it — and seeding over it with the task that just
+     * ended is exactly what emptying it was meant to prevent.
+     */
+    fun hasSessionName(): Boolean = prefs.contains(KEY_SESSION_NAME)
 
     // ---------- the chosen project ----------
 

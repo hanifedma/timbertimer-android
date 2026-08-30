@@ -47,8 +47,11 @@ class TodoWidget : AppWidgetProvider() {
             }.getOrNull() ?: return
             if (ids.isEmpty()) return
 
-            manager.notifyAppWidgetViewDataChanged(ids, R.id.widget_list)
+            // Push the views first, then ask for the reload — see the note on
+            // TodayTodoWidget.refresh. Asking first lets the push discard the
+            // request, which leaves the list showing rows it already had.
             ids.forEach { id -> render(context, manager, id) }
+            manager.notifyAppWidgetViewDataChanged(ids, R.id.widget_list)
         }
 
         private fun render(context: Context, manager: AppWidgetManager, widgetId: Int) {

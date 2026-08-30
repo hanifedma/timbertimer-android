@@ -70,8 +70,17 @@ class TodayTodoWidget : AppWidgetProvider() {
             }.getOrNull() ?: return
             if (ids.isEmpty()) return
 
-            manager.notifyAppWidgetViewDataChanged(ids, R.id.widget_list)
+            // Order matters, and getting it backwards is what made a new task
+            // sit invisible on the home screen until something else happened.
+            //
+            // render() pushes RemoteViews that call setRemoteAdapter again. The
+            // host compares that adapter intent against the one it already has,
+            // finds them equal, and rebinds the *cached* rows rather than
+            // asking the factory for new ones — so a reload requested before
+            // the push is thrown away by the push. Asking afterwards is what
+            // makes onDataSetChanged actually run.
             ids.forEach { id -> render(context, manager, id) }
+            manager.notifyAppWidgetViewDataChanged(ids, R.id.widget_list)
         }
 
         private fun render(context: Context, manager: AppWidgetManager, widgetId: Int) {
