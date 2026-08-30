@@ -56,24 +56,40 @@
         android:background="@color/widget_divider"
         android:contentDescription="@null" />
 
+    <!--
+      Top, not centre. The list starts at the top of this row, and a ring
+      floating at the vertical middle beside it reads as misaligned rather than
+      as balanced — the two halves are one reading of the same day, so they
+      should begin on the same line.
+    -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
         android:orientation="horizontal"
-        android:gravity="center_vertical">
+        android:gravity="top">
 
         <!--
-          The ring. Hidden rather than shrunk on a widget too narrow to carry
-          both it and a readable list — see ProjectTimeWidget.render. Its bitmap
-          is painted at runtime, so the src here is only what the preview shows.
+          The ring. Sized at runtime from how much room the host says this
+          widget has — see ProjectTimeWidget.chartSizeDp — and hidden outright
+          when that comes to less than a ring worth reading.
+
+          wrap_content, deliberately: on API 31 and up the widget sets exact
+          dimensions with setViewLayoutWidth, but nothing older has that call,
+          and there the bitmap's own intrinsic size is the only lever left. The
+          max bounds are a backstop for a host that reports an implausible size.
         -->
         <ImageView
             android:id="@+id/widget_chart"
-            android:layout_width="64dp"
-            android:layout_height="64dp"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="top"
+            android:adjustViewBounds="true"
+            android:maxWidth="132dp"
+            android:maxHeight="132dp"
             android:layout_marginStart="2dp"
-            android:layout_marginEnd="10dp"
+            android:layout_marginEnd="12dp"
+            android:layout_marginTop="4dp"
             android:visibility="gone" />
 
         <FrameLayout

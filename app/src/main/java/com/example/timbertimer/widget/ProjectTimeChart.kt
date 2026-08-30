@@ -24,18 +24,28 @@ import com.example.timbertimer.data.local.TodayTotals
 object ProjectTimeChart {
 
     /**
-     * Bitmaps in a RemoteViews travel over Binder, which has a hard ceiling on
-     * how much a single transaction may carry — and the widget's other views
-     * share that budget. Even the largest ring here is ~230 KB, well inside it,
-     * and drawing bigger would only buy detail nobody can see at this size.
+     * Bitmaps in a RemoteViews are parcelled as blobs — shared memory once they
+     * pass a few kilobytes — so they do not spend the Binder transaction
+     * budget, and the platform's own ceiling for a widget is generous (six
+     * bytes per screen pixel). This cap is well under both while still leaving
+     * the largest ring crisp on a 3x density screen; past it there is only
+     * detail nobody can see.
      */
-    private const val MAX_PX = 240
+    private const val MAX_PX = 480
 
     /** Below this there is not enough ring left to read; see [render]. */
     private const val MIN_PX = 48
 
-    /** As a share of the diameter. Thick enough to read, thin enough to be a ring. */
-    private const val STROKE_RATIO = 0.30f
+    // How thick the ring is, as a share of its diameter.
+    //
+    // Not one number, because thickness does not read the same at every size: a
+    // small ring needs a fat stroke to be legible at all, while the same share
+    // on a large one closes the middle up and turns the ring into a blob. So it
+    // tapers — chunky when small, slimmer as it grows.
+    private const val THICK_AT_DP = 64
+    private const val THIN_AT_DP = 128
+    private const val STROKE_RATIO_THICK = 0.30f
+    private const val STROKE_RATIO_THIN = 0.21f
 
     /**
      * Paints the day as a ring, or returns null when there is nothing to draw.
@@ -52,13 +62,19 @@ object ProjectTimeChart {
         // away.
         if (total <= 0 || totals.projects.isEmpty()) return null
 
-        val density = context.resources.displayMetrics.density
-        val size = (sizeDp * density).toInt().coerceIn(MIN_PX, MAX_PX)
+        val metrics = context.resources.displayMetrics
+        val size = (sizeDp * metrics.density).toInt().coerceIn(MIN_PX, MAX_PX)
 
         val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        // Stamped with the density in force now, not the one the device booted
+        // with, which is what a new bitmap would otherwise carry. They differ
+        // whenever the user has moved the display-size slider, and the widget
+        // sizes this image from its own intrinsic width on hosts too old for
+        // setViewLayoutWidth — so a stale density would quietly scale the ring.
+        bitmap.density = metrics.densityDpi
         val canvas = Canvas(bitmap)
 
-        val stroke = size * STROKE_RATIO
+        val stroke = size * strokeRatio(sizeDp)
         // Half the stroke keeps the arc inside the bitmap — a stroke straddles
         // the path it follows, so a ring drawn to the edge loses its outer half.
         val inset = stroke / 2f
@@ -96,6 +112,13 @@ object ProjectTimeChart {
         }
 
         return bitmap
+    }
+
+    /** Thickness for a ring of this diameter — see the constants above. */
+    private fun strokeRatio(sizeDp: Int): Float {
+        val travelled = (sizeDp - THICK_AT_DP).toFloat() / (THIN_AT_DP - THICK_AT_DP)
+        val t = travelled.coerceIn(0f, 1f)
+        return STROKE_RATIO_THICK + (STROKE_RATIO_THIN - STROKE_RATIO_THICK) * t
     }
 
     /**
