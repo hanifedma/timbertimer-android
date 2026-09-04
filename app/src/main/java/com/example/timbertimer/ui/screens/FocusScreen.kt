@@ -13,20 +13,22 @@ import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Tune
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -34,6 +36,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -47,6 +50,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.example.timbertimer.R
+import com.example.timbertimer.core.Suggestions
 import com.example.timbertimer.core.Time
 import com.example.timbertimer.data.model.ActiveTimer
 import com.example.timbertimer.data.model.DataMode
@@ -265,6 +269,9 @@ private fun dialMaxSize(): Dp {
     return minOf(byHeight, byWidth).dp.coerceIn(160.dp, 420.dp)
 }
 
+// The task field's suggestion menu, same as ProjectPicker's — the exposed
+// dropdown is still experimental in Material 3.
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SetupPanel(
     form: FocusForm,
@@ -332,40 +339,94 @@ private fun SetupPanel(
         // @Composable context, so it cannot call projectLabel() itself.
         val fallbackTitle = projectLabel(project)
 
-        OutlinedTextField(
-            value = form.title,
-            onValueChange = onTitleChange,
-            enabled = sessionEditable,
-            singleLine = true,
-            label = { Text(stringResource(R.string.field_task)) },
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-            modifier = Modifier
-                .fillMaxWidth()
-                .onFocusChanged { state ->
-                    // Leaving a running stopwatch's name empty would otherwise
-                    // save a blank title; restore the project's name, the same
-                    // fallback Start uses for a session begun with nothing
-                    // typed (see TimerEngine.updateRunning for why this isn't
-                    // done on every keystroke instead). A countdown's field is
-                    // disabled, so it never reaches this.
-                    if (!state.isFocused && timer?.mode == TimerMode.STOPWATCH &&
-                        form.title.isBlank()
-                    ) {
-                        onTitleChange(fallbackTitle)
+        // Names already used, narrowed to what has been typed — the same thing
+        // the web app gets from a browser's <datalist>. Recomputed only when
+        // the history or the text changes: a running session recomposes this
+        // tree once a second, and matching every past name against the field on
+        // each of those ticks would be work for an answer that did not move.
+        val matches = remember(suggestions, form.title, sessionEditable) {
+            if (sessionEditable) Suggestions.matching(suggestions, form.title) else emptyList()
+        }
+        var menuOpen by remember { mutableStateOf(false) }
+        // Never open with nothing in it, which is what would otherwise happen
+        // the moment the typed name stops matching anything.
+        val menuShowing = menuOpen && matches.isNotEmpty()
+
+        ExposedDropdownMenuBox(
+            expanded = menuShowing,
+            onExpandedChange = { menuOpen = it },
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            OutlinedTextField(
+                value = form.title,
+                onValueChange = {
+                    // Typing re-opens the menu, so dismissing it is not
+                    // permanent — the next keystroke is a new question.
+                    menuOpen = true
+                    onTitleChange(it)
+                },
+                enabled = sessionEditable,
+                singleLine = true,
+                label = { Text(stringResource(R.string.field_task)) },
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { menuOpen = false }),
+                trailingIcon = {
+                    // Shown exactly when there is a menu to open, which is not
+                    // the same as "there is history": type a name nothing
+                    // matches and the arrow goes, rather than staying on as a
+                    // control that does nothing when tapped.
+                    if (matches.isNotEmpty()) {
+                        ExposedDropdownMenuDefaults.TrailingIcon(
+                            expanded = menuShowing,
+                            // Secondary, so the arrow toggles the menu. The
+                            // field itself is the primary anchor and
+                            // deliberately does not — without this the icon is
+                            // decoration and taps fall through it.
+                            modifier = Modifier.menuAnchor(MenuAnchorType.SecondaryEditable),
+                        )
                     }
                 },
-        )
+                modifier = Modifier
+                    // PrimaryEditable, so tapping the field puts the cursor in
+                    // it rather than opening the menu — this is a text field
+                    // that suggests, not a picker that happens to be typeable.
+                    .menuAnchor(MenuAnchorType.PrimaryEditable)
+                    .fillMaxWidth()
+                    .onFocusChanged { state ->
+                        if (!state.isFocused) menuOpen = false
+                        // Leaving a running stopwatch's name empty would
+                        // otherwise save a blank title; restore the project's
+                        // name, the same fallback Start uses for a session
+                        // begun with nothing typed (see
+                        // TimerEngine.updateRunning for why this isn't done on
+                        // every keystroke instead). A countdown's field is
+                        // disabled, so it never reaches this.
+                        if (!state.isFocused && timer?.mode == TimerMode.STOPWATCH &&
+                            form.title.isBlank()
+                        ) {
+                            onTitleChange(fallbackTitle)
+                        }
+                    },
+            )
 
-        if (sessionEditable && suggestions.isNotEmpty()) {
-            Spacer(Modifier.height(8.dp))
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(suggestions, key = { it }) { suggestion ->
-                    AssistChip(
-                        onClick = { onTitleChange(suggestion) },
-                        label = {
+            ExposedDropdownMenu(
+                expanded = menuShowing,
+                onDismissRequest = { menuOpen = false },
+                // Bounded so the list cannot swallow the screen on a phone in
+                // landscape, where there is barely 400dp of height to begin
+                // with. Past this it scrolls.
+                modifier = Modifier.heightIn(max = 240.dp),
+            ) {
+                matches.forEach { suggestion ->
+                    DropdownMenuItem(
+                        text = {
                             Text(suggestion, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         },
-                        modifier = Modifier.widthIn(max = 180.dp),
+                        onClick = {
+                            onTitleChange(suggestion)
+                            menuOpen = false
+                        },
+                        contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding,
                     )
                 }
             }

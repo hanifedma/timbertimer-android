@@ -157,6 +157,12 @@ fun TimberApp(
     val restTally by viewModel.settings.restTally.collectAsStateWithLifecycle()
     val restAlert by viewModel.settings.restAlert.collectAsStateWithLifecycle()
 
+    // Built when the history changes, not when the screen redraws. This tree
+    // recomposes every second while a session runs, and sorting the whole
+    // record list on each of those ticks bought nothing — the answer only
+    // moves when a session is recorded or removed.
+    val titleHistory = remember(records) { viewModel.titleHistory() }
+
     // Midnight rolling past is what makes the Today list "new and blank"
     // without any explicit reset — but only for someone who was actually
     // looking at today live; see checkTodayNotesRollover.
@@ -287,7 +293,7 @@ fun TimberApp(
                                 timer = timer,
                                 rest = rest,
                                 now = now,
-                                suggestions = viewModel.titleSuggestions(),
+                                suggestions = titleHistory,
                                 dataMode = dataMode,
                                 wide = wideContent,
                                 onTitleChange = viewModel::setTitle,

@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.example.timbertimer.R
+import com.example.timbertimer.core.Suggestions
 import com.example.timbertimer.core.Time
 import com.example.timbertimer.core.UiMessage
 import com.example.timbertimer.data.RecordMapper
@@ -354,17 +355,15 @@ class TimberViewModel(
         viewModelScope.launch { repository.saveProject(project.copy(tree = species.id)) }
     }
 
-    /** Names already used, newest first, offered as suggestions. */
-    fun titleSuggestions(): List<String> =
-        records.value
-            .asSequence()
-            .filterNot { it.isRest }
-            .sortedByDescending { it.startedAt }
-            .map { it.title.trim() }
-            .filter { it.isNotEmpty() }
-            .distinctBy { it.lowercase() }
-            .take(8)
-            .toList()
+    /**
+     * Names already used, newest first — what the task field suggests from.
+     *
+     * The whole history rather than the most recent handful, because the field
+     * narrows it by what has been typed and a cap here would quietly hide the
+     * match someone is reaching for. [Suggestions] owns the rules and the
+     * count the menu actually shows.
+     */
+    fun titleHistory(): List<String> = Suggestions.history(records.value)
 
     // ---------- the timer ----------
 
