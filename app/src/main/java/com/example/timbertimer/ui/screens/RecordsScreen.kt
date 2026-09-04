@@ -72,7 +72,7 @@ fun RecordsScreen(
     val focus = allRecords.filterNot { it.isRest }
     val todayKey = Time.localDateKey(System.currentTimeMillis())
     val todayMinutes = focus
-        .filter { Time.localDateKey(if (it.endedAt > 0) it.endedAt else it.startedAt) == todayKey }
+        .filter { Time.localDateKey(it.filedAt) == todayKey }
         .sumOf { it.actualMinutes }
     val totalMinutes = focus.sumOf { it.actualMinutes }
 

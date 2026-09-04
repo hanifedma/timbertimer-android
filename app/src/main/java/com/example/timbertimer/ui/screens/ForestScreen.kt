@@ -95,12 +95,12 @@ fun ForestScreen(
         }
     }
 
-    // A tree belongs to the day it was planted on, which is when it ended.
-    // Every record grew one: a session has no outcome to fall short of, so
-    // nothing is left out of the forest.
+    // A tree belongs to the day it was planted on, which is the day the session
+    // began — see FocusRecord.filedAt. Every record grew one: a session has no
+    // outcome to fall short of, so nothing is left out of the forest.
     val planted = remember(records, rangeStart, rangeEnd) {
         records
-            .filter { (it.endedAt.takeIf { end -> end > 0 } ?: it.startedAt) in rangeStart until rangeEnd }
+            .filter { it.filedAt in rangeStart until rangeEnd }
             .sortedBy { it.startedAt }
     }
     val focusMinutes = planted.filterNot { it.isRest }.sumOf { it.actualMinutes }

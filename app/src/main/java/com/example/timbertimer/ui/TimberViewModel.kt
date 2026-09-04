@@ -630,8 +630,11 @@ class TimberViewModel(
         viewModelScope.launch { repository.deleteRecord(record) }
     }
 
-    fun deleteAllRecords() {
-        viewModelScope.launch { repository.deleteAllRecords() }
+    fun deleteAllRecordsAndProjects() {
+        viewModelScope.launch {
+            repository.deleteAllRecordsAndProjects()
+            engine.reprojectOrphanedTimer()
+        }
     }
 
     // ---------- projects ----------
@@ -733,6 +736,9 @@ class TimberViewModel(
         }
         viewModelScope.launch {
             repository.deleteProject(id)
+            // A session running under it moves to the default project, the same
+            // way its finished records just did.
+            engine.reprojectOrphanedTimer()
             _messages.emit(UiMessage.of(R.string.toast_project_deleted))
         }
         _projectEditor.value = null

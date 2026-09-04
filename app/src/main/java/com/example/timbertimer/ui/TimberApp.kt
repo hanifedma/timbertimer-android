@@ -552,7 +552,7 @@ fun TimberApp(
             },
             confirmButton = {
                 TextButton(onClick = {
-                    viewModel.deleteAllRecords()
+                    viewModel.deleteAllRecordsAndProjects()
                     confirmDeleteAll = false
                 }) { Text(stringResource(R.string.btn_delete)) }
             },

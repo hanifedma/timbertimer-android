@@ -80,6 +80,21 @@ data class FocusRecord(
     val endsAt: Long get() = maxOf(endedAt, startedAt)
 
     /**
+     * The instant this record is filed under — the day it *started*.
+     *
+     * A session begun at 23:30 and finished at 00:40 belongs to the evening the
+     * user sat down for it, not to the morning they happened to stop in: it is
+     * the day they would name if asked when they did it, and it is the only
+     * answer that does not move a whole night's work into a day it had nothing
+     * to do with.
+     *
+     * The calendar is the one place that ignores this, and rightly: a grid of
+     * clock time draws the block where it actually ran, across both days. Every
+     * tally that has to pick a single day picks this one.
+     */
+    val filedAt: Long get() = startedAt
+
+    /**
      * The species written on this record. Only used where the project is
      * unknown — a [ProjectBook] is what decides how a record is actually drawn.
      */

@@ -137,13 +137,17 @@ class DayTotalsTest {
     }
 
     @Test
-    fun `yesterday is left out, and a record is counted on the day it ended`() {
+    fun `a record counts on the day it started, not the day it ended`() {
         val totals = todayTotals(
             records = listOf(
                 record("yesterday", at(Time.addDays(today, -1), 9), 60),
-                // 23:30 last night to 00:30 this morning: the user finished it
-                // today, so it counts today.
+                // 23:30 last night through 00:30 this morning. The user sat
+                // down for it yesterday, so all sixty minutes are yesterday's —
+                // none of it leaks into today.
                 record("overnight", at(Time.addDays(today, -1), 23, 30), 60),
+                // And the mirror image: begun at 23:40 tonight, finishing after
+                // midnight, and counted here in full.
+                record("tonight", at(today, 23, 40), 60),
                 record("tomorrow", at(Time.addDays(today, 1), 9), 60),
             ),
             projects = book,
@@ -151,7 +155,24 @@ class DayTotalsTest {
         )
 
         assertEquals(60, totals.minutes)
-        assertEquals("overnight", 60, totals.projects.single().minutes)
+        assertEquals("tonight", 60, totals.projects.single().minutes)
+    }
+
+    @Test
+    fun `an overnight rest is counted once, on the evening it began`() {
+        val yesterdayStart = Time.addDays(today, -1)
+        val records = listOf(record("nap", at(yesterdayStart, 23, 45), 30, Projects.REST_ID))
+
+        val tonight = todayTotals(records, book, Time.localDateKey(yesterdayStart))
+        val morning = todayTotals(records, book, todayKey)
+
+        // The awkward one: a rest that crosses midnight used to be tallied on
+        // the far side of it, which both moved the minutes and moved the count
+        // the standing notification reads.
+        assertEquals(1, tonight.rests)
+        assertEquals(30, tonight.restMinutes)
+        assertEquals(0, morning.rests)
+        assertEquals(0, morning.restMinutes)
     }
 
     @Test

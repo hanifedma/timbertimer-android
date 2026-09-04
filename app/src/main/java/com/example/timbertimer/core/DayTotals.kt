@@ -17,10 +17,9 @@ import com.example.timbertimer.data.model.ProjectBook
 /**
  * Today's records folded into one row per project, longest first.
  *
- * A record counts towards the day it *ended* on, which is the rule the records
- * list already uses — a session that ran through midnight belongs to the day the
- * user finished it, not the one they sat down on. A record with no end yet falls
- * back to its start so it is never silently dropped.
+ * A record counts towards the day it *started* on — see [FocusRecord.filedAt].
+ * A session that ran through midnight belongs to the evening it began, in full;
+ * none of it is carried over into the next morning's figures.
  *
  * Rest is a project like any other here, so it appears in the list with its own
  * colour and its minutes count towards the total. It is *also* counted
@@ -32,9 +31,7 @@ fun todayTotals(
     projects: ProjectBook,
     today: String,
 ): TodayTotals {
-    val todays = records.filter {
-        Time.localDateKey(if (it.endedAt > 0) it.endedAt else it.startedAt) == today
-    }
+    val todays = records.filter { Time.localDateKey(it.filedAt) == today }
 
     val totals = todays
         .groupBy { it.projectId }

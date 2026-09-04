@@ -174,7 +174,7 @@
     <string name="account_continue_google">Continue with Google</string>
     <string name="account_other_way">Trouble signing in? Use the browser</string>
     <string name="account_sign_out">Sign out</string>
-    <string name="account_delete_all">Delete all records</string>
+    <string name="account_delete_all">Delete all records and projects</string>
     <string name="badge_local">Local</string>
     <string name="badge_synced">Synced</string>
     <string name="brand_local_garden">Local garden</string>
@@ -205,7 +205,7 @@
     <string name="toast_signed_out">Signed out.</string>
     <string name="toast_sound_on">Timer sound on.</string>
     <string name="toast_sound_off">Timer sound off.</string>
-    <string name="toast_all_deleted">All records deleted.</string>
+    <string name="toast_all_deleted">All records and projects deleted.</string>
     <string name="toast_cloud_load_fail">Cloud sync could not load. Local records are still available.</string>
     <string name="toast_cloud_not_ready">Cloud table is not ready. Using local records.</string>
     <string name="toast_cloud_save_fail">Cloud save failed. Saved locally.</string>
@@ -228,8 +228,8 @@
     <string name="auth_native_rejected">Google signed you in, but the server would not accept it. Try “Trouble signing in?” below.</string>
 
     <!-- Confirmations -->
-    <string name="confirm_delete_all_cloud">Delete all cloud records? This cannot be undone.</string>
-    <string name="confirm_delete_all_local">Delete all local records? This cannot be undone.</string>
+    <string name="confirm_delete_all_cloud">Delete every cloud record and every project you made? Your to-do lists are kept. This cannot be undone.</string>
+    <string name="confirm_delete_all_local">Delete every local record and every project you made? Your to-do lists are kept. This cannot be undone.</string>
     <string name="confirm_delete_record">Delete “%1$s”?</string>
     <string name="confirm_delete_title">Delete</string>
 

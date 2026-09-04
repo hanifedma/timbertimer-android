@@ -1,5 +1,6 @@
 package com.example.timbertimer.data.remote
 
+import com.example.timbertimer.data.model.Projects
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.builtins.ListSerializer
@@ -387,6 +388,23 @@ class SupabaseApi(
         val url = restUrl(SupabaseConfig.PROJECTS_TABLE)
             .addQueryParameter("user_id", "eq.$userId")
             .addQueryParameter("id", "eq.$id")
+            .build()
+        execute(authorized(url, token).delete().build())
+    }
+
+    /**
+     * Every project this user made, in one request.
+     *
+     * The two built-ins are excluded rather than deleted and re-created. They
+     * are what a rest is filed under and what a session with nothing chosen
+     * falls back to, so a window where they do not exist is a window where
+     * another device can write a record pointing at nothing.
+     */
+    suspend fun deleteUserProjects(token: String, userId: String) {
+        val kept = Projects.BUILTIN_IDS.joinToString(",")
+        val url = restUrl(SupabaseConfig.PROJECTS_TABLE)
+            .addQueryParameter("user_id", "eq.$userId")
+            .addQueryParameter("id", "not.in.($kept)")
             .build()
         execute(authorized(url, token).delete().build())
     }

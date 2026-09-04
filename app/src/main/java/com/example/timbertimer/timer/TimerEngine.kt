@@ -410,6 +410,32 @@ class TimerEngine(
     }
 
     /**
+     * Moves a running session off a project that has just been deleted.
+     *
+     * Not [updateRunning], which is the user editing a stopwatch and declines
+     * to touch a countdown on purpose — a countdown's tree is settled when it
+     * starts. This is repair, not an edit, and it has to cover both: a session
+     * left pointing at a project nothing can look up records itself under a
+     * name that no longer exists and lands in the forest as a grey stub.
+     *
+     * The same rule the project's records follow when it goes: move to the
+     * default rather than be orphaned.
+     */
+    fun reprojectOrphanedTimer() {
+        val current = _timer.value ?: return
+        if (repository.projects.value.contains(current.projectId)) return
+
+        val updated = current.copy(projectId = Projects.DEFAULT_ID, cloudSynced = false)
+        applyTimer(updated)
+        scope.launch {
+            // Same guard as updateRunning: the session may have finished, or
+            // been replaced by one started elsewhere, since this was decided.
+            if (_timer.value?.id != updated.id || completing) return@launch
+            if (updated.title.isNotBlank() && repository.pushCloudTimer(updated)) markSynced()
+        }
+    }
+
+    /**
      * The Finish button.
      *
      * A countdown that has not run out is not an abandoned session any more —

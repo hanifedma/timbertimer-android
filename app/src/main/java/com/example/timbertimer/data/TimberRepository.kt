@@ -673,7 +673,18 @@ class TimberRepository(
         _messages.tryEmit(UiMessage.of(R.string.toast_record_deleted))
     }
 
-    suspend fun deleteAllRecords() {
+    /**
+     * The clean slate: every record, and every project the user made.
+     *
+     * The two built-ins stay, because nothing works without them — a rest has
+     * to have somewhere to go, and a session started before anything has been
+     * chosen has to land somewhere.
+     *
+     * The to-do lists are deliberately untouched. A note is not a record of
+     * what happened; it is a list of what has not happened yet, and clearing
+     * the history is no reason to lose next week's shopping.
+     */
+    suspend fun deleteAllRecordsAndProjects() {
         val user = _session.value
 
         if (user != null) {
@@ -695,7 +706,54 @@ class TimberRepository(
         }
 
         _records.value = emptyList()
+        deleteUserProjects()
         _messages.tryEmit(UiMessage.of(R.string.toast_all_deleted))
+    }
+
+    /**
+     * Every project the user made, gone; the two built-ins kept.
+     *
+     * After the records rather than before, and that order is the whole point.
+     * [deleteProject] moves a project's records onto the default one so nothing
+     * is orphaned — sensible on its own, and pure waste here, where it would
+     * rewrite every row in the history moments before deleting it. Worse, a
+     * failure halfway would leave a half-moved history behind. With the records
+     * already gone there is nothing to move.
+     */
+    private suspend fun deleteUserProjects() {
+        if (_projects.value.all.any { !it.isBuiltIn }) {
+            projectsLock.withLock {
+                val now = System.currentTimeMillis()
+                val kept = _projects.value.all.filter { it.isBuiltIn }
+                // The built-ins are seeded at startup so they are almost
+                // certainly already here; re-adding a missing one costs
+                // nothing and is what stops the picker coming back empty.
+                val restored = Projects.BUILTIN_IDS
+                    .filterNot { id -> kept.any { it.id == id } }
+                    .map { Projects.builtIn(it, now) }
+
+                val book = ProjectBook(kept + restored)
+                _projects.value = book
+                persistProjects(book.all)
+
+                val user = _session.value
+                val token =
+                    if (user != null && !projectsTableMissing) auth.validAccessToken() else null
+                if (user != null && token != null) {
+                    runCatching { api.deleteUserProjects(token, user.userId) }
+                        .onFailure { logSync(it) }
+                }
+                pushProjects(restored)
+            }
+        }
+
+        // Outside that guard on purpose: whatever was selected is very likely
+        // one of the projects just deleted, but it can also be a stale id left
+        // by a device that deleted it first, and a picker pointing at nothing
+        // shows a grey blank either way.
+        if (settings.selectedProjectId.value !in Projects.BUILTIN_IDS) {
+            settings.setSelectedProjectId(Projects.DEFAULT_ID)
+        }
     }
 
     // ---------- to-do ----------
@@ -1021,7 +1079,7 @@ class TimberRepository(
         val today = Time.localDateKey(System.currentTimeMillis())
         return _records.value
             .filter { !it.isRest }
-            .filter { Time.localDateKey(if (it.endedAt > 0) it.endedAt else it.startedAt) == today }
+            .filter { Time.localDateKey(it.filedAt) == today }
             .sumOf { it.actualMinutes }
     }
 
